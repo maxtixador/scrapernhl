@@ -40,7 +40,7 @@ Finally, I encourage developers to contribute to the project. Whether it's throu
 - **Performance Improvements**: Optimizations have been made to improve the speed and efficiency of the scraper.
 
 ### 1. Documentation Website
-The new documentation website provides comprehensive information on how to use the scraper, including tutorials, examples, and API references. It is designed to help users quickly get started and make the most of the scraper's capabilities. You can access the documentation [here](https://scrapernhl.github.io).
+The new documentation website provides comprehensive information on how to use the scraper, including tutorials, examples, and API references. It is designed to help users quickly get started and make the most of the scraper's capabilities. You can access the documentation [here](https://maxtixador.github.io/scrapernhl/).
 
 ### 2. Modular Codebase
 The codebase has been restructured into focused modules, each responsible for a specific aspect of the scraper's functionality. This modular approach improves code organization, readability, and maintainability. The original monolithic code has been preserved in `scraper_legacy.py` for reference.

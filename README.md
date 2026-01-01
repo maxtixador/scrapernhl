@@ -1,132 +1,97 @@
-# Welcome to ScraperNHL's documentation!
+[project]
+name = "scrapernhl"
+version = "0.1.4"
+description = "A comprehensive Python package for scraping and analyzing NHL data with built-in Expected Goals (xG) modeling"
+readme = "README.md"
+requires-python = ">=3.12"
+license = {text = "MIT"}
+authors = [
+    {name = "Max Tixador", email = "maxtixador@gmail.com"}
+]
+keywords = [
+    "nhl",
+    "hockey",
+    "sports",
+    "analytics",
+    "scraper",
+    "data",
+    "statistics",
+    "xG",
+    "expected-goals",
+    "play-by-play",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Games/Entertainment",
+    "Typing :: Typed",
+]
+dependencies = [
+    "beautifulsoup4>=4.14.3",
+    "click>=8.0.0",
+    "joblib>=1.5.3",
+    "jupyterlab>=4.5.1",
+    "material>=0.1",
+    "mike>=2.1.3",
+    "mkdocs-material>=9.7.1",
+    "numpy>=2.3.5",
+    "pandas>=2.3.3",
+    "polars>=1.36.1",
+    "requests>=2.32.5",
+    "selectolax>=0.4.6",
+    "urllib3>=2.6.2",
+    "xgboost>=3.1.2",
+]
 
-ScraperNHL is a Python package designed for scraping and analyzing NHL data. This documentation will guide you through the installation, usage, and features of the package.
+[project.urls]
+Homepage = "https://maxtixador.github.io/scrapernhl/"
+Documentation = "https://maxtixador.github.io/scrapernhl/"
+Repository = "https://github.com/maxtixador/scrapernhl"
+"Source Code" = "https://github.com/maxtixador/scrapernhl"
+"Bug Tracker" = "https://github.com/maxtixador/scrapernhl/issues"
+Changelog = "https://github.com/maxtixador/scrapernhl/blob/master/CHANGELOG.md"
 
-# ScraperNHL
+[project.scripts]
+scrapernhl = "scrapernhl.cli:cli"
 
-A comprehensive Python package for scraping and analyzing NHL data with built-in Expected Goals (xG) modeling and advanced analytics.
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
 
-[![Documentation](https://img.shields.io/badge/docs-mkdocs-blue)](https://maxtixador.github.io/scrapernhl/)
-[![Python Version](https://img.shields.io/badge/python-3.12%2B-blue)](https://www.python.org/downloads/)
-[![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+[tool.setuptools.packages.find]
+include = ["scrapernhl*"]
 
-## Features
+[tool.setuptools.package-data]
+scrapernhl = ["models/*.json", "models/*.pkl"]
 
-### Comprehensive Data Scraping
-- **Teams**: NHL team data, rosters, and metadata
-- **Schedule**: Team schedules with game states and scores
-- **Standings**: League standings with points and rankings
-- **Player Stats**: Skater and goalie statistics
-- **Play-by-Play**: Detailed game events with coordinates
-- **Draft Data**: Historical draft picks and prospects
-- **Expected Goals (xG)**: Built-in xG model for shot quality analysis
+[dependency-groups]
+dev = [
+    "mkdocs>=1.6.1",
+    "mkdocs-material>=9.7.1",
+    "mkdocstrings[python]>=1.0.0",
+    "mkdocs-git-revision-date-plugin>=0.3.2",
+    "mkdocs-minify-plugin>=0.8.0",
+    "mkdocs-macros-plugin>=1.5.0",
+    "pytest>=9.0.2",
+    "pytest-cov>=7.0.0",
+]
 
-### Multiple Access Methods
-- **Python API**: Full-featured library with pandas/polars support
-- **Command-Line Interface**: Quick data exports without writing code
-- **Jupyter Notebooks**: Interactive examples and tutorials
-
-### Performance & Design
-- **Modular Architecture**: Fast imports (~100ms vs 2-3s)
-- **Flexible Output**: CSV, JSON, Parquet, Excel formats
-- **Backward Compatible**: Existing code works without changes
-- **Well Documented**: Comprehensive guides and API reference
-
-## Installation
-
-```bash
-pip install scrapernhl
-```
-
-Or install from source:
-```bash
-git clone https://github.com/maxtixador/scrapernhl.git
-cd scrapernhl
-pip install -e .
-```
-
-## Quick Start
-
-### Python API
-
-```python
-from scrapernhl import scrapeTeams, scrapeSchedule, scrapeStandings
-
-# Get all NHL teams
-teams = scrapeTeams()
-
-# Get team schedule
-schedule = scrapeSchedule("MTL", "20252026")
-
-# Get current standings
-from datetime import datetime
-standings = scrapeStandings(datetime.now().strftime("%Y-%m-%d"))
-```
-
-### Command-Line Interface
-
-```bash
-# Scrape teams
-scrapernhl teams --output teams.csv
-
-# Scrape schedule
-scrapernhl schedule MTL 20252026 --format json
-
-# Scrape play-by-play with xG
-scrapernhl game 2024020001 --with-xg --output game.csv
-
-# Get help
-scrapernhl --help
-```
-
-## Documentation
-
-📚 **Full documentation available at: [maxtixador.github.io/scrapernhl](https://maxtixador.github.io/scrapernhl/)**
-
-- [Getting Started Guide](https://maxtixador.github.io/scrapernhl/getting-started/)
-- [API Reference](https://maxtixador.github.io/scrapernhl/api/)
-- [CLI Usage Examples](https://maxtixador.github.io/scrapernhl/examples/cli/)
-- [Advanced Analytics](https://maxtixador.github.io/scrapernhl/examples/advanced/)
-- [Data Export Options](https://maxtixador.github.io/scrapernhl/examples/export/)
-
-## Examples
-
-Check out the example notebooks for detailed tutorials:
-- [notebooks/01_basic_scraping.ipynb](notebooks/01_basic_scraping.ipynb) - Basic data scraping
-- [notebooks/02_advanced_analytics.ipynb](notebooks/02_advanced_analytics.ipynb) - xG analysis, TOI, player combinations
-- [notebooks/03_data_export.ipynb](notebooks/03_data_export.ipynb) - Export formats and workflows
-
-## What's New in v0.1.4
-
-- **Modular Architecture**: Codebase restructured into focused modules
-- **CLI Integration**: Command-line interface for all scraping functions
-- **Documentation Website**: Comprehensive guides and examples
-- **Performance**: Faster imports and optimized data fetching
-- **Testing**: Unit tests for reliability
-- **Standardized Code**: Consistent style across notebooks and examples
-
-See [full release notes](https://maxtixador.github.io/scrapernhl/announcements/version-014/)
-
-## Contributing
-
-Contributions are welcome! Whether it's bug reports, feature requests, documentation improvements, or code contributions - your help makes this project better.
-
-## License
-
-MIT License - see LICENSE file for details
-
-## Author
-
-**Max Tixador** | Hockey Analytics Enthusiast
-
-- Twitter: [@woumaxx](https://x.com/woumaxx)
-- Bluesky: [@HabsBrain.com](https://bsky.app/profile/habsbrain.com)
-- Email: [maxtixador@gmail.com](mailto:maxtixador@gmail.com)
-
-## Acknowledgments
-
-Built for the hockey analytics community. Special thanks to all contributors and users who provide feedback and suggestions!
-
----
-
-**Last Updated:** January 2026 | **Version:** 0.1.4
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = [
+    "--verbose",
+    "--cov=scrapernhl",
+    "--cov-report=html",
+    "--cov-report=term-missing",
+]
