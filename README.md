@@ -1,3 +1,7 @@
+# Welcome to ScraperNHL's documentation!
+
+ScraperNHL is a Python package designed for scraping and analyzing NHL data. This documentation will guide you through the installation, usage, and features of the package.
+
 # ScraperNHL
 
 A comprehensive Python package for scraping and analyzing NHL data with built-in Expected Goals (xG) modeling and advanced analytics.
