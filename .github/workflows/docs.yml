@@ -22,7 +22,8 @@ jobs:
       
       - name: Install dependencies
         run: |
-          uv add mkdocs mkdocs-material
+          pip install mkdocs mkdocs-material mkdocstrings mkdocs-git-revision-date-plugin mkdocs-minify-plugin mkdocs-macros-plugin
+          pip install -e .
       
       - name: Deploy to GitHub Pages
-        run: uv run mkdocs gh-deploy --force
+        run: mkdocs gh-deploy --force
