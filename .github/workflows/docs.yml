@@ -29,4 +29,6 @@ jobs:
       
       - name: Deploy to GitHub Pages
         run: |
-          uv run mkdocs gh-deploy --force --no-jekyll
+          uv run mkdocs build
+          touch site/.nojekyll
+          uv run mkdocs gh-deploy --force
