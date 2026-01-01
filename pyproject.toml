@@ -1,9 +1,39 @@
 [project]
 name = "scrapernhl"
 version = "0.1.4"
-description = "Scraper for NHL data"
+description = "A comprehensive Python package for scraping and analyzing NHL data with built-in Expected Goals (xG) modeling"
 readme = "README.md"
 requires-python = ">=3.12"
+license = {text = "MIT"}
+authors = [
+    {name = "Max Tixador", email = "maxtixador@gmail.com"}
+]
+keywords = [
+    "nhl",
+    "hockey",
+    "sports",
+    "analytics",
+    "scraper",
+    "data",
+    "statistics",
+    "xG",
+    "expected-goals",
+    "play-by-play",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Games/Entertainment",
+    "Typing :: Typed",
+]
 dependencies = [
     "beautifulsoup4>=4.14.3",
     "click>=8.0.0",
@@ -20,10 +50,14 @@ dependencies = [
     "urllib3>=2.6.2",
     "xgboost>=3.1.2",
 ]
-authors = [
-    {name = "Max Tixador", email = "maxtixador@gmail.com"}
-]
-license = {text = "MIT"}
+
+[project.urls]
+Homepage = "https://maxtixador.github.io/scrapernhl/"
+Documentation = "https://maxtixador.github.io/scrapernhl/"
+Repository = "https://github.com/maxtixador/scrapernhl"
+"Source Code" = "https://github.com/maxtixador/scrapernhl"
+"Bug Tracker" = "https://github.com/maxtixador/scrapernhl/issues"
+Changelog = "https://github.com/maxtixador/scrapernhl/blob/master/CHANGELOG.md"
 
 [project.scripts]
 scrapernhl = "scrapernhl.cli:cli"
