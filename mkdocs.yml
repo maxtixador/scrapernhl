@@ -1,7 +1,8 @@
 site_name: ScraperNHL Documentation
 site_description: NHL data scraping package with Expected Goals model
 site_author: Max Tixador
-repo_url: https://github.com/maxtixador/scrapernhl  # This should be a string, not a list
+site_url: https://maxtixador.github.io/scrapernhl/
+repo_url: https://github.com/maxtixador/scrapernhl
 repo_name: maxtixador/scrapernhl
 
 nav:
@@ -36,14 +37,20 @@ theme:
       toggle:
         icon: material/brightness-7
         name: Switch to dark mode
+  
+  icon:
+    repo: fontawesome/brands/github
           
   features:
     - navigation.tabs
     - navigation.sections
+    - navigation.top
+    - navigation.tracking
     - search.suggest
     - search.highlight
+    - search.share
     - content.code.copy
-    - header.autohide
+    - content.code.annotate
 
 markdown_extensions:
   - admonition
