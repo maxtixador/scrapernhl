@@ -14,6 +14,8 @@ nav:
       - Advanced Analytics: examples/advanced.md
       - Data Export: examples/export.md
   - About: about.md
+  - Announcements:
+      - Version 0.1.4: announcements/version-014.md
 
 theme:
   name: material
