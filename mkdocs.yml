@@ -76,17 +76,10 @@ plugins:
   - git-revision-date  # To show the last updated date
   - minify  # To minify the HTML output
   - macros  # To use macros in the documentation
-  - mike:
-      alias_type: symlink
-      remote: origin
-      default_branch: main
   
 extra:
   social:
     - icon: fontawesome/brands/github
       link: https://github.com/maxtixador/scrapernhl
-  
-  version:
-    provider: mike
   
         

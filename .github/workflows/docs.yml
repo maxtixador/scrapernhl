@@ -22,7 +22,7 @@ jobs:
       
       - name: Install dependencies
         run: |
-          pip install mkdocs mkdocs-material mkdocstrings mkdocs-git-revision-date-plugin mkdocs-minify-plugin mkdocs-macros-plugin
+          pip install mkdocs mkdocs-material mkdocstrings[python] mkdocs-git-revision-date-plugin mkdocs-minify-plugin mkdocs-macros-plugin
           pip install -e .
       
       - name: Deploy to GitHub Pages
