@@ -23,3 +23,4 @@ NHL data scraping package with Expected Goals (xG) model.
 - [About the Project](about.md)
 - [GitHub Repository](https://github.com/maxtixador/scrapernhl)
 - [PyPI Package](https://pypi.org/project/scrapernhl/)
+- [Announcements](announcements/version-014.md) - Latest news and updates
