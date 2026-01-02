@@ -18,11 +18,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       
+      - name: Install libomp on macOS (required for xgboost)
+        if: runner.os == 'macOS'
+        run: brew install libomp
+      
       - name: Install uv
         uses: astral-sh/setup-uv@v4
       
       - name: Set up Python ${{ matrix.python-version }}
         run: uv python install ${{ matrix.python-version }}
+      
+      - name: Create virtual environment
+        run: uv venv
       
       - name: Install dependencies (Python 3.9)
         if: matrix.python-version == '3.9'
@@ -67,7 +74,7 @@ jobs:
             pandas==2.0.0 \
             polars==0.20.0 \
             requests==2.31.0 \
-            selectolax==0.3.0 \
+            selectolax==0.3.27 \
             urllib3==2.0.0 \
             xgboost==2.0.0 \
             pytest==7.0.0
