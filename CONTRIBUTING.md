@@ -121,7 +121,7 @@ Then open a Pull Request on GitHub with:
 
 ### Python Code
 
-- **Python Version**: 3.12+
+- **Python Version**: 3.9+ (tested on 3.9-3.13)
 - **Line Length**: ~100 characters (flexible)
 - **Imports**: Group stdlib, third-party, local imports
 - **Type Hints**: Encouraged but not required yet
