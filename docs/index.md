@@ -6,6 +6,22 @@ NHL data scraping package with Expected Goals (xG) model.
 
 ScraperNHL is a Python package designed for scraping and analyzing NHL data. This documentation will guide you through the installation, usage, and features of the package.
 
+**Python Version:** 3.9+ (tested on 3.9-3.13)
+
+## Installation
+
+**Stable (PyPI):**
+```bash
+pip install scrapernhl
+```
+
+**Latest (GitHub):**
+```bash
+pip install git+https://github.com/maxtixador/scrapernhl.git
+```
+
+See [Getting Started](getting-started.md) for more installation options.
+
 ## Features
 
 - Fast NHL data scraping using `selectolax`

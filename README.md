@@ -30,11 +30,28 @@ Python package for scraping and analyzing NHL data with built-in Expected Goals 
 
 ## Installation
 
+### From PyPI (Stable)
+
 ```bash
 pip install scrapernhl
 ```
 
-Or install from source:
+### From GitHub (Latest)
+
+Install the development version with the latest features and fixes:
+
+```bash
+pip install git+https://github.com/maxtixador/scrapernhl.git
+```
+
+Or with uv:
+
+```bash
+uv pip install git+https://github.com/maxtixador/scrapernhl.git
+```
+
+### From Source
+
 ```bash
 git clone https://github.com/maxtixador/scrapernhl.git
 cd scrapernhl

@@ -4,19 +4,42 @@ Install the package and start scraping NHL data in minutes.
 
 ## Installation
 
-You can install the package using `uv` (recommended) with the following command:
-```bash
-uv add scrapernhl
-```
+### From PyPI (Stable)
 
-or via `pip`:
+Install the latest stable version:
+
 ```bash
 pip install scrapernhl
 ```
 
-or from GitHub (for the latest version):
+Or with uv:
+
 ```bash
-pip install git+https://github.com/max-tixador/scrapernhl.git
+uv add scrapernhl
+```
+
+### From GitHub (Latest)
+
+Install the development version with the latest features and fixes:
+
+```bash
+pip install git+https://github.com/maxtixador/scrapernhl.git
+```
+
+Or with uv:
+
+```bash
+uv pip install git+https://github.com/maxtixador/scrapernhl.git
+```
+
+### From Source
+
+For development or local modifications:
+
+```bash
+git clone https://github.com/maxtixador/scrapernhl.git
+cd scrapernhl
+pip install -e .
 ```
 
 
