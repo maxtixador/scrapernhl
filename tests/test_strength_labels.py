@@ -175,12 +175,12 @@ def test_team_strength_aggregates():
     # Check that OTT doesn't have 5v4 time (the bug would give them this)
     ott_5v4 = result[(result['team'] == 'OTT') & (result['strength'] == '5v4')]
     if not ott_5v4.empty:
-        errors.append(f"BUG: OTT should NOT have 5v4 time, but has {ott_5v4.iloc[0]['seconds']} seconds")
+        errors.append(f"FAILED: OTT should NOT have 5v4 time, but has {ott_5v4.iloc[0]['seconds']} seconds")
     
     # Check that WPG doesn't have 4v5 time (they should have 5v4, not 4v5)
     wpg_4v5 = result[(result['team'] == 'WPG') & (result['strength'] == '4v5')]
     if not wpg_4v5.empty:
-        errors.append(f"BUG: WPG should NOT have 4v5 time, but has {wpg_4v5.iloc[0]['seconds']} seconds")
+        errors.append(f"FAILED: WPG should NOT have 4v5 time, but has {wpg_4v5.iloc[0]['seconds']} seconds")
     
     if errors:
         print("\n❌ ERRORS FOUND:")
@@ -229,7 +229,7 @@ def test_on_ice_stats_by_player_strength():
         
         # These players should NOT have 5v4 time (the bug would give them this)
         if not player_5v4.empty:
-            errors.append(f"BUG: OTT_Player_{pid} should NOT have 5v4 time, but has {player_5v4.iloc[0]['seconds']} seconds")
+            errors.append(f"FAILED: OTT_Player_{pid} should NOT have 5v4 time, but has {player_5v4.iloc[0]['seconds']} seconds")
     
     # Check WPG players
     wpg_players = result[result['eventTeam'] == 'WPG']
@@ -253,7 +253,7 @@ def test_on_ice_stats_by_player_strength():
         
         # WPG players should NOT have 4v5 time (the bug would give them this)
         if not player_4v5.empty:
-            errors.append(f"BUG: WPG_Player_{pid} should NOT have 4v5 time, but has {player_4v5.iloc[0]['seconds']} seconds")
+            errors.append(f"FAILED: WPG_Player_{pid} should NOT have 4v5 time, but has {player_4v5.iloc[0]['seconds']} seconds")
     
     if errors:
         print("\n❌ ERRORS FOUND:")
