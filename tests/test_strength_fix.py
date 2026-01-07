@@ -338,12 +338,38 @@ def test_toi_by_player_and_strength():
     print("  ✓ toi_by_player_and_strength labels are correct!")
 
 
+def test_combo_on_ice_stats():
+    """Test that combo_on_ice_stats assigns correct strength labels for focus_team."""
+    print("\nTesting combo_on_ice_stats...")
+    
+    from scrapernhl.scraper_legacy import combo_on_ice_stats
+    
+    pbp = create_test_pbp()
+    
+    # Test with OTT as focus_team (alphabetically first)
+    result_ott = combo_on_ice_stats(pbp, focus_team='OTT', n_team=2, min_TOI=0)
+    ott_strengths = result_ott['strength'].unique()
+    print(f"  OTT (focus_team, alphabetically 1st) strength labels: {sorted(ott_strengths)}")
+    assert '5v4' in ott_strengths, f"OTT should have 5v4 strength, got {ott_strengths}"
+    assert '4v5' not in ott_strengths, f"OTT should NOT have 4v5 strength"
+    
+    # Test with WPG as focus_team (alphabetically second) - THIS IS THE CRITICAL TEST
+    result_wpg = combo_on_ice_stats(pbp, focus_team='WPG', n_team=2, min_TOI=0)
+    wpg_strengths = result_wpg['strength'].unique()
+    print(f"  WPG (focus_team, alphabetically 2nd) strength labels: {sorted(wpg_strengths)}")
+    assert '4v5' in wpg_strengths, f"WPG should have 4v5 strength, got {wpg_strengths}"
+    assert '5v4' not in wpg_strengths, f"WPG should NOT have 5v4 strength (this was the bug!)"
+    
+    print("  ✓ combo_on_ice_stats labels are correct!")
+
+
 if __name__ == "__main__":
     try:
         test_player_strength_labels()
         test_team_strength_labels()
         test_alphabetical_ordering()
         test_toi_by_player_and_strength()
+        test_combo_on_ice_stats()
         
         print("\n" + "="*50)
         print("✅ ALL STRENGTH LABEL TESTS PASSED")

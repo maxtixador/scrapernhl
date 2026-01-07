@@ -4407,9 +4407,18 @@ def combo_on_ice_stats(
 
     # helpers
     def strength_label():
+        """
+        Return strength label from focus_team's perspective.
+        """
         l = len(sk_on[t1]); r = len(sk_on[t2])
         g1 = len(g_on[t1]) > 0; g2 = len(g_on[t2]) > 0
-        return f"{l}{'' if g1 else '*'}v{r}{'' if g2 else '*'}"
+        left = f"{l}{'' if g1 else '*'}"
+        right = f"{r}{'' if g2 else '*'}"
+        
+        # If focus_team is t2, flip the perspective
+        if focus_team == t2:
+            return f"{right}v{left}"
+        return f"{left}v{right}"
 
     def players_for_combo(team):
         base = list(sk_on[team])
