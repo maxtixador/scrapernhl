@@ -8,6 +8,7 @@ wheels/
 
 # Virtual environments
 .venv
+test_env/
 
 # Testing
 .pytest_cache/
@@ -17,3 +18,7 @@ htmlcov/
 
 # MkDocs generated site
 site/
+
+# AI development files (internal use only)
+.ai/summaries/
+.ai/decisions/

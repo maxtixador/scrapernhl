@@ -5,17 +5,17 @@ This file re-exports all public functions from the modularized codebase
 to maintain backward compatibility with existing code.
 
 For new code, prefer importing directly from submodules:
-    from scrapernhl.scrapers.teams import scrapeTeams
-    from scrapernhl.features.xg import engineer_xg_features
+    from scrapernhl.nhl.scrapers.teams import scrapeTeams
+    from scrapernhl.nhl.analytics import calculate_corsi
 """
 
 # Re-export scraper functions for backward compatibility
-from scrapernhl.scrapers.teams import getTeamsData, scrapeTeams
-from scrapernhl.scrapers.schedule import getScheduleData, scrapeSchedule
-from scrapernhl.scrapers.standings import getStandingsData, scrapeStandings
-from scrapernhl.scrapers.roster import getRosterData, scrapeRoster
-from scrapernhl.scrapers.stats import getTeamStatsData, scrapeTeamStats
-from scrapernhl.scrapers.draft import (
+from scrapernhl.nhl.scrapers.teams import getTeamsData, scrapeTeams
+from scrapernhl.nhl.scrapers.schedule import getScheduleData, scrapeSchedule
+from scrapernhl.nhl.scrapers.standings import getStandingsData, scrapeStandings
+from scrapernhl.nhl.scrapers.roster import getRosterData, scrapeRoster
+from scrapernhl.nhl.scrapers.stats import getTeamStatsData, scrapeTeamStats
+from scrapernhl.nhl.scrapers.draft import (
     getDraftDataData,
     scrapeDraftData,
     getRecordsDraftData,
@@ -23,7 +23,7 @@ from scrapernhl.scrapers.draft import (
     getRecordsTeamDraftHistoryData,
     scrapeTeamDraftHistory,
 )
-from scrapernhl.scrapers.games import (
+from scrapernhl.nhl.scrapers.games import (
     getGameData,
     scrapePlays,
     getGoalReplayData,
@@ -65,7 +65,7 @@ def __getattr__(name):
     }
     
     if name in legacy_functions:
-        from scrapernhl import scraper_legacy
+        from scrapernhl.nhl import scraper_legacy
         return getattr(scraper_legacy, name)
     
     raise AttributeError(f"module '{__name__}' has no attribute '{name}'")

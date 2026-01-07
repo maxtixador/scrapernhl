@@ -16,9 +16,13 @@ pd.set_option('display.float_format', lambda x: '%.2f' % x)
 Retrieve information about all NHL teams including their names, IDs, and locations.
 
 ```python
-from scrapernhl.scrapers.teams import scrapeTeams
+# Import using backward-compatible package-level import
+from scrapernhl import scrapeTeams
 
-# Get all NHL teams
+# Or import directly from NHL module
+# from scrapernhl.nhl.scrapers.teams import scrapeTeams
+
+# Get all NHL teams (cached automatically)
 teams = scrapeTeams()
 print(f"Found {len(teams)} teams")
 
@@ -31,9 +35,9 @@ teams[['name.default', 'abbrev','id', 'placeName.default', 'commonName.default']
 Get the complete schedule for a specific team and season, including game dates, opponents, scores, and game states.
 
 ```python
-from scrapernhl.scrapers.schedule import scrapeSchedule
+from scrapernhl import scrapeSchedule
 
-# Get Montreal Canadiens schedule for current season
+# Get Montreal Canadiens schedule for current season (with caching)
 schedule = scrapeSchedule("MTL", "20252026")
 print(f"MTL has {len(schedule)} games this season")
 
@@ -47,14 +51,15 @@ schedule[['gameDate', 'gameType', 'homeTeam.abbrev', 'homeTeam.score',
 Fetch the league standings for a specific date, including wins, losses, points, and point percentage.
 
 ```python
-from scrapernhl.scrapers.standings import scrapeStandings
+from scrapernhl import scrapeStandings, console
 from datetime import datetime
 
-# Get current standings
+# Get current standings (with progress indication)
 today = datetime.now().strftime("%Y-%m-%d")
+console.print_info(f"Fetching standings for {today}...")
 standings = scrapeStandings(today)
 
-print(f"Standings as of {today}:")
+console.print_success(f"Retrieved standings for {len(standings)} teams")
 standings[['teamName.default', 'teamAbbrev.default', 'gamesPlayed', 'wins', 'losses', 'otLosses', 'points', 'pointPctg', 'date']].sort_values(by='pointPctg', ascending=False).head(10)
 ```
 
@@ -62,21 +67,22 @@ standings[['teamName.default', 'teamAbbrev.default', 'gamesPlayed', 'wins', 'los
 
 Get the complete roster for a team, including player names, positions, physical attributes, and biographical information.
 
-```python
-from scrapernhl.scrapers.roster import scrapeRoster
+```python import scrapeRoster, create_table
 
 # Get Montreal Canadiens roster
 roster = scrapeRoster("MTL", "20252026")
 
 # Separate by position
-forwards = roster[roster['positionCode'].isin(['C', 'L', 'R'])]  # Forwards: Centers, Left Wings, Right Wings
+forwards = roster[roster['positionCode'].isin(['C', 'L', 'R'])]
 defensemen = roster[roster['positionCode'] == 'D']
 goalies = roster[roster['positionCode'] == 'G']
 
 print(f"Forwards: {len(forwards)}, Defense: {len(defensemen)}, Goalies: {len(goalies)}")
 
+# Display forwards with formatted table
 print("\nForwards:")
 forwards[['id', 'firstName.default', 'lastName.default', 'positionCode', 'shootsCatches', 
+          'sweaterNumber', 'heightInInches', 'weightInPounds', 'birthDate', 'birthCountry']]
           'sweaterNumber', 'heightInInches', 'weightInPounds', 'birthDate', 'birthCountry']].assign(team="MTL").head(10)
 ```
 
@@ -342,12 +348,108 @@ print(f"Old import style works: {len(teams_old_style)} teams scraped")
 ## Error Handling
 
 ```python
-from scrapernhl.scrapers.games import scrapePlays
+from scrapernhl.nhl.scrapers.games import scrapePlays
+from scrapernhl.exceptions import InvalidGameError
 
 try:
     pbp = scrapePlays(9999999999)  # Invalid game ID
-except Exception as e:
+except InvalidGameError as e:
     print(f"Error scraping game: {e}")
+```
+
+## 10. Player Stats (Phase 3)
+
+New player scraping functions with progress bars and caching.
+
+### Player Profile
+
+```python
+from scrapernhl import scrapePlayerProfile, console
+
+# Get player profile (Auston Matthews)
+player_id = 8478402
+console.print_info(f"Fetching profile for player {player_id}...")
+profile = scrapePlayerProfile(player_id)
+
+if not profile.empty:
+    console.print_success("Profile retrieved!")
+    print(f"\nName: {profile['firstName.default'].iloc[0]} {profile['lastName.default'].iloc[0]}")
+    print(f"Position: {profile['position'].iloc[0]}")
+    print(f"Team: {profile['fullTeamName.default'].iloc[0]}")
+    print(f"Birth Date: {profile['birthDate'].iloc[0]}")
+```
+
+### Player Season Stats
+
+```python
+from scrapernhl import scrapePlayerSeasonStats
+
+# Get season stats
+stats = scrapePlayerSeasonStats(8478402, "20232024")
+
+if not stats.empty:
+    print(f"\n2023-24 Season:")
+    print(f"  GP: {stats['gamesPlayed'].iloc[0]}")
+    print(f"  G: {stats['goals'].iloc[0]}")
+    print(f"  A: {stats['assists'].iloc[0]}")
+    print(f"  PTS: {stats['points'].iloc[0]}")
+```
+
+### Player Game Log
+
+```python
+from scrapernhl import scrapePlayerGameLog
+
+# Get game-by-game log
+gamelog = scrapePlayerGameLog(8478402, "20232024")
+
+print(f"\nGame Log: {len(gamelog)} games")
+print(f"Total Goals: {gamelog['goals'].sum()}")
+print(f"Total Points: {gamelog['points'].sum()}")
+
+# Show recent games
+gamelog[['gameDate', 'opponentAbbrev', 'goals', 'assists', 'points', 'toi']].head(5)
+```
+
+### Multiple Players (Batch)
+
+```python
+from scrapernhl import scrapeMultiplePlayerStats
+
+# Get stats for multiple players with progress bar
+player_ids = [8478402, 8479318, 8471214, 8477492, 8478550]  # Matthews, McDavid, Crosby, Pastrnak, Draisaitl
+all_stats = scrapeMultiplePlayerStats(player_ids, "20232024")
+
+# Show top scorers
+print(f"\nFetched stats for {len(all_stats)} players")
+all_stats.sort_values('points', ascending=False)[['firstName.default', 'lastName.default', 'points', 'goals', 'assists']].head()
+```
+
+## 11. Batch Scraping (Phase 3)
+
+Parallel scraping with rate limiting and progress bars.
+
+```python
+from scrapernhl import BatchScraper, console
+
+# Create batch scraper
+scraper = BatchScraper(
+    max_workers=5,          # Parallel workers
+    rate_limit=10.0,        # Max 10 requests/second
+    max_retries=3,          # Retry failed requests
+    show_progress=True      # Show progress bar
+)
+
+# Scrape multiple games
+game_ids = [2023020001, 2023020002, 2023020003, 2023020004, 2023020005]
+from scrapernhl.nhl.scrapers.games import getGameData
+
+console.print_info(f"Scraping {len(game_ids)} games in parallel...")
+result = scraper.scrape_batch(game_ids, getGameData)
+
+console.print_success(f"Successfully scraped {len(result.successful)} games")
+if result.failed:
+    console.print_warning(f"Failed: {len(result.failed)} games")
 ```
 
 ## Async Scraping (Advanced)

@@ -11,6 +11,8 @@ import polars as pl
 
 from scrapernhl.core.http import fetch_json
 from scrapernhl.core.utils import json_normalize
+from scrapernhl.core.progress import console, create_progress_bar
+from scrapernhl.core.cache import cached
 from scrapernhl.config import DEFAULT_HEADERS, DEFAULT_TIMEOUT
 
 LOG = logging.getLogger(__name__)
@@ -121,3 +123,71 @@ def scrapePlays(game: Union[str, int], addGoalReplayData: bool = False, output_f
     raw_data = getGameData(game, addGoalReplayData)
     plays = raw_data.get('plays', [])
     return json_normalize(plays, output_format)
+
+
+def scrapeMultipleGames(
+    game_ids: List[Union[str, int]],
+    addGoalReplayData: bool = False,
+    output_format: str = "pandas",
+    show_progress: bool = True,
+) -> Union[pd.DataFrame, pl.DataFrame]:
+    """
+    Scrape multiple games with progress tracking.
+    
+    Parameters:
+    - game_ids: List of game IDs to scrape
+    - addGoalReplayData: Whether to fetch goal replay data
+    - output_format: One of ["pandas", "polars"]
+    - show_progress: Whether to show progress bar
+    
+    Returns:
+    - Combined DataFrame with all games' play-by-play data
+    
+    Examples:
+        >>> game_ids = [2023020001, 2023020002, 2023020003]
+        >>> df = scrapeMultipleGames(game_ids)
+        >>> print(f"Scraped {len(df)} plays from {df['gameId'].nunique()} games")
+    """
+    all_plays = []
+    
+    if show_progress:
+        with create_progress_bar() as progress:
+            task = progress.add_task(
+                "[cyan]Scraping games...",
+                total=len(game_ids)
+            )
+            
+            for game_id in game_ids:
+                try:
+                    plays_df = scrapePlays(game_id, addGoalReplayData, output_format)
+                    all_plays.append(plays_df)
+                    progress.update(task, advance=1)
+                except Exception as e:
+                    console.print_error(f"Failed to scrape game {game_id}: {e}")
+                    progress.update(task, advance=1)
+    else:
+        for game_id in game_ids:
+            try:
+                plays_df = scrapePlays(game_id, addGoalReplayData, output_format)
+                all_plays.append(plays_df)
+            except Exception as e:
+                console.print_error(f"Failed to scrape game {game_id}: {e}")
+    
+    # Combine all dataframes
+    if not all_plays:
+        console.print_warning("No games successfully scraped")
+        if output_format == "polars":
+            return pl.DataFrame()
+        return pd.DataFrame()
+    
+    if output_format == "polars":
+        combined = pl.concat(all_plays, how="vertical")
+    else:
+        combined = pd.concat(all_plays, ignore_index=True)
+    
+    console.print_success(
+        f"Successfully scraped {len(combined)} plays from {len(all_plays)}/{len(game_ids)} games"
+    )
+    
+    return combined
+

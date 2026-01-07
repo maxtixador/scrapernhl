@@ -251,5 +251,207 @@ if all_team_stats:
     team_summary
 ```
 
+## Phase 4: Advanced Analytics
+
+The Phase 4 analytics module provides comprehensive statistical analysis and visualization capabilities.
+
+### Shot Metrics and Scoring Chances
+
+```python
+from scrapernhl import (
+    identify_scoring_chances,
+    display_scoring_chances,
+    engineer_xg_features
+)
+
+# Get game data
+game_tuple = scrape_game(game_id, include_tuple=True)
+pbp = game_tuple.data
+
+# Calculate shot metrics (distance and angle are calculated by engineer_xg_features)
+pbp = engineer_xg_features(pbp)
+
+# Identify high-danger, medium-danger, and low-danger chances
+pbp = identify_scoring_chances(pbp)
+
+# Display scoring chances summary
+display_scoring_chances(pbp, game_tuple.homeTeam, game_tuple.awayTeam)
+```
+
+### Advanced Corsi and Fenwick
+
+```python
+from scrapernhl import calculate_corsi, calculate_fenwick, display_advanced_stats
+
+# Calculate possession metrics
+corsi_df = calculate_corsi(pbp)
+fenwick_df = calculate_fenwick(pbp)
+
+print("\\nCorsi metrics (all shot attempts):")
+print(corsi_df)
+
+print("\\nFenwick metrics (unblocked shot attempts):")
+print(fenwick_df)
+
+# Display formatted advanced stats
+display_advanced_stats(corsi_df, fenwick_df, game_tuple.homeTeam, game_tuple.awayTeam)
+```
+
+### Player Time on Ice Analysis
+
+```python
+from scrapernhl import calculate_player_toi, calculate_zone_start_percentage
+
+# Calculate player TOI by strength
+player_toi = calculate_player_toi(pbp, game_tuple.rosters)
+
+print("\\nTop 5 players by 5v5 TOI:")
+top_5v5_toi = player_toi[player_toi['strength'] == '5v5'].nlargest(5, 'toi_seconds')
+print(top_5v5_toi[['player_name', 'team', 'toi_minutes']])
+
+# Calculate zone start percentages
+zone_starts = calculate_zone_start_percentage(pbp, game_tuple.rosters)
+
+print("\\nPlayers with most offensive zone starts:")
+top_ozone = zone_starts.nlargest(5, 'ozone_start_pct')
+print(top_ozone[['player_name', 'team', 'ozone_starts', 'dzone_starts', 'ozone_start_pct']])
+```
+
+### Score Effects Analysis
+
+```python
+from scrapernhl import calculate_score_effects, display_score_effects
+
+# Analyze how score differential affects play
+score_effects = calculate_score_effects(pbp)
+
+print("\\nScore Effects (how teams perform when leading/trailing/tied):")
+print(score_effects)
+
+# Display formatted score effects
+display_score_effects(score_effects)
+```
+
+### Shooting Patterns Analysis
+
+```python
+from scrapernhl import analyze_shooting_patterns, display_shooting_patterns
+
+# Analyze shooting patterns by location and type
+shooting_patterns = analyze_shooting_patterns(pbp)
+
+print("\\nShooting patterns by team:")
+print(shooting_patterns)
+
+# Display formatted shooting patterns
+display_shooting_patterns(shooting_patterns)
+```
+
+### Comprehensive Analytics Report
+
+```python
+from scrapernhl import create_analytics_report, display_game_summary
+
+# Generate complete analytics report
+report = create_analytics_report(pbp, game_tuple.rosters)
+
+print("\\nGame Summary:")
+print(f"Home: {report['home_team']}, Away: {report['away_team']}")
+print(f"Score: {report['home_goals']}-{report['away_goals']}")
+
+# Display beautifully formatted game summary
+display_game_summary(
+    report, 
+    game_tuple.homeTeam, 
+    game_tuple.awayTeam,
+    show_players=True,
+    show_scoring_chances=True
+)
+
+# Access individual report sections
+print("\\nTeam Stats:")
+print(report['team_stats'])
+
+print("\\nTop Players:")
+print(report['top_players'])
+
+print("\\nScoring Chances:")
+print(report['scoring_chances'])
+```
+
+### Team and Player Summary Stats
+
+```python
+from scrapernhl import (
+    calculate_team_stats_summary,
+    calculate_player_stats_summary,
+    display_team_stats,
+    display_player_summary,
+    display_top_players
+)
+
+# Calculate team summary statistics
+team_stats = calculate_team_stats_summary(pbp, game_tuple.rosters)
+
+print("\\nTeam Statistics Summary:")
+print(team_stats)
+
+# Display formatted team stats
+display_team_stats(team_stats, game_tuple.homeTeam, game_tuple.awayTeam)
+
+# Calculate player summary statistics
+player_stats = calculate_player_stats_summary(pbp, game_tuple.rosters)
+
+print("\\nTop 5 players by goals:")
+top_scorers = player_stats.nlargest(5, 'goals')
+print(top_scorers[['player_name', 'team', 'goals', 'assists', 'points', 'shots']])
+
+# Display formatted player summaries
+for _, player in top_scorers.iterrows():
+    display_player_summary(player)
+
+# Display top players table
+display_top_players(player_stats, metric='points', n=10)
+```
+
+### Complete Analytics Workflow
+
+```python
+from scrapernhl import print_analytics_summary
+
+# Complete workflow: scrape, analyze, and display
+game_id = 2024020001
+
+# 1. Scrape game data
+game_tuple = scrape_game(game_id, include_tuple=True)
+pbp = game_tuple.data
+
+# 2. Engineer features (includes shot distance and angle)
+pbp = engineer_xg_features(pbp)
+pbp = predict_xg_for_pbp(pbp)
+pbp = identify_scoring_chances(pbp)
+
+# 3. Calculate all metrics
+home_corsi = calculate_corsi(pbp, game_tuple.homeTeam)
+home_fenwick = calculate_fenwick(pbp, game_tuple.homeTeam)
+player_toi = calculate_player_toi(pbp, game_tuple.rosters)
+zone_starts = calculate_zone_start_percentage(pbp, game_tuple.rosters)
+score_effects = calculate_score_effects(pbp, game_tuple.homeTeam)
+shooting_patterns = analyze_shooting_patterns(pbp)
+
+# 4. Generate comprehensive report for home team
+report = create_analytics_report(
+    pbp,
+    shifts_df=None,
+    team=game_tuple.homeTeam
+)
+
+# 5. Display everything beautifully
+print_analytics_summary(report)
+```
+
+## See Also
 
 - [API Reference](../api.md) - Complete function documentation
+- [Getting Started](../getting-started.md) - Basic usage examples
+- [Scraping Examples](scraping.md) - Data collection examples

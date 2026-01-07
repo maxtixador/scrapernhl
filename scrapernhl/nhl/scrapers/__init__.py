@@ -11,6 +11,14 @@ from .draft import (
     getRecordsTeamDraftHistoryData, scrapeTeamDraftHistory
 )
 from .games import getGameData, scrapePlays, getGoalReplayData
+from .players import (
+    scrapePlayerProfile,
+    scrapePlayerSeasonStats,
+    scrapePlayerGameLog,
+    scrapeMultiplePlayerStats,
+    scrapeTeamRoster,
+    scrapeTeamPlayerStats,
+)
 
 __all__ = [
     # Teams
@@ -29,4 +37,11 @@ __all__ = [
     "getRecordsTeamDraftHistoryData", "scrapeTeamDraftHistory",
     # Games & Plays
     "getGameData", "scrapePlays", "getGoalReplayData",
+    # Players
+    "scrapePlayerProfile",
+    "scrapePlayerSeasonStats",
+    "scrapePlayerGameLog",
+    "scrapeMultiplePlayerStats",
+    "scrapeTeamRoster",
+    "scrapeTeamPlayerStats",
 ]

@@ -14,7 +14,7 @@ def demo():
     print("-" * 60)
     import time
     start = time.time()
-    from scrapernhl.scrapers.teams import scrapeTeams
+    from scrapernhl.nhl.scrapers.teams import scrapeTeams
     print(f"✓ Import time: {(time.time() - start)*1000:.1f}ms")
     
     # Demo 2: Scrape teams
@@ -36,13 +36,13 @@ def demo():
     print("\n📁 Demo 4: New Module Structure")
     print("-" * 60)
     print("Available scraper modules:")
-    print("  • scrapernhl.scrapers.teams")
-    print("  • scrapernhl.scrapers.schedule")
-    print("  • scrapernhl.scrapers.standings")
-    print("  • scrapernhl.scrapers.roster")
-    print("  • scrapernhl.scrapers.stats")
-    print("  • scrapernhl.scrapers.draft")
-    print("  • scrapernhl.scrapers.games")
+    print("  • scrapernhl.nhl.scrapers.teams")
+    print("  • scrapernhl.nhl.scrapers.schedule")
+    print("  • scrapernhl.nhl.scrapers.standings")
+    print("  • scrapernhl.nhl.scrapers.roster")
+    print("  • scrapernhl.nhl.scrapers.stats")
+    print("  • scrapernhl.nhl.scrapers.draft")
+    print("  • scrapernhl.nhl.scrapers.games")
     
     # Demo 5: Safety
     print("\n🛡️  Demo 5: Safety Features")
@@ -59,7 +59,7 @@ def demo():
     print("✅ All demos completed successfully!")
     print("=" * 60)
     print("\nNext steps:")
-    print("  • Use new imports: from scrapernhl.scrapers.teams import scrapeTeams")
+    print("  • Use new imports: from scrapernhl.nhl.scrapers.teams import scrapeTeams")
     print("  • See MODULARIZATION.md for full documentation")
     print("  • Run tests/test_modular.py for comprehensive tests")
     

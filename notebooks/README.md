@@ -21,6 +21,9 @@ Advanced features and analytics:
 - On-ice statistics (Corsi, xG differential)
 - Team-level aggregates
 - Multi-game season analysis
+- Phase 4: Advanced analytics and visualization
+- Shot metrics and scoring chances
+- Comprehensive analytics reports
 
 ### 3. [Data Export](03_data_export.ipynb)
 Exporting data to various formats:
@@ -30,6 +33,14 @@ Exporting data to various formats:
 - Incremental/append mode
 - Custom formatting
 - Using Polars for fast exports
+
+### 4. [Comprehensive Testing](04_comprehensive_testing.ipynb)
+Complete testing of all Phase 1-4 features:
+- Phase 1: Error handling, logging, validation
+- Phase 2: Progress bars, caching, styled console output
+- Phase 3: Player stats, batch scraping, parallel processing
+- Phase 4: Advanced analytics and visualization
+- Full workflow examples with all features
 
 ## Getting Started
 
