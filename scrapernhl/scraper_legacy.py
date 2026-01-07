@@ -4030,13 +4030,22 @@ def toi_by_player_and_strength(pbp_change_events: pd.DataFrame) -> pd.DataFrame:
     toi = defaultdict(lambda: defaultdict(float))  # toi[player_id][strength] = seconds
     player_info = {}  # player_id -> (name, team)
 
-    def strength_label():
+    def strength_label(team=None):
+        """
+        Return strength label from the perspective of the given team.
+        If team is None, returns from t1's perspective (for backward compatibility).
+        If team is specified, returns the label showing that team's skaters first.
+        """
         s1 = len(on_ice[t1])
         s2 = len(on_ice[t2])
         g1 = len(goalies[t1]) > 0
         g2 = len(goalies[t2]) > 0
         left  = f"{s1}{'' if g1 else '*'}"
         right = f"{s2}{'' if g2 else '*'}"
+        
+        # If team is specified and it's t2, flip the perspective
+        if team == t2:
+            return f"{right}v{left}"
         return f"{left}v{right}"
 
     prev_t = 0
@@ -4045,8 +4054,8 @@ def toi_by_player_and_strength(pbp_change_events: pd.DataFrame) -> pd.DataFrame:
         # Record time for current strength
         if ts > prev_t:
             dt = ts - prev_t
-            str_label = strength_label()
             for team in [t1, t2]:
+                str_label = strength_label(team)
                 for pid in list(on_ice[team]) + list(goalies[team]):
                     toi[pid][str_label] += dt
         # Apply OFF events
@@ -4074,8 +4083,8 @@ def toi_by_player_and_strength(pbp_change_events: pd.DataFrame) -> pd.DataFrame:
     game_end = int(df['elapsedTime'].max())
     if game_end > prev_t:
         dt = game_end - prev_t
-        str_label = strength_label()
         for team in [t1, t2]:
+            str_label = strength_label(team)
             for pid in list(on_ice[team]) + list(goalies[team]):
                 toi[pid][str_label] += dt
 
@@ -4094,6 +4103,8 @@ def toi_by_player_and_strength(pbp_change_events: pd.DataFrame) -> pd.DataFrame:
             })
 
     out = pd.DataFrame(records)
+    if out.empty:
+        return pd.DataFrame(columns=['player1Id','player1Name','eventTeam','strength','seconds','minutes'])
     return (out.sort_values(['eventTeam','player1Name','strength'])
                .reset_index(drop=True))
 
@@ -4169,18 +4180,27 @@ def on_ice_stats_by_player_strength(
     toi = defaultdict(float)  # (pid,strength) -> seconds
     stats = defaultdict(lambda: defaultdict(float))  # (pid,strength) -> metric -> value
 
-    def strength_label():
+    def strength_label(team=None):
+        """
+        Return strength label from the perspective of the given team.
+        If team is None, returns from t1's perspective (for backward compatibility).
+        If team is specified, returns the label showing that team's skaters first.
+        """
         s1, s2 = len(skaters_on[t1]), len(skaters_on[t2])
         g1, g2 = len(goalies_on[t1]) > 0, len(goalies_on[t2]) > 0
         left  = f"{s1}{'' if g1 else '*'}"
         right = f"{s2}{'' if g2 else '*'}"
+        
+        # If team is specified and it's t2, flip the perspective
+        if team == t2:
+            return f"{right}v{left}"
         return f"{left}v{right}"
 
     def iter_players(team):
         return (list(skaters_on[team]) + list(goalies_on[team])) if include_goalies else list(skaters_on[team])
 
     # Attribute a *play* row at current strength
-    def attribute_play(row, s):
+    def attribute_play(row):
         evt = str(row['Event'])
         team = row.get('eventTeam')
         if team not in (t1, t2):  # ignore rows without a valid team
@@ -4200,45 +4220,53 @@ def on_ice_stats_by_player_strength(
                 is_block = False
                 xg = float(row[xg_col]) if xg_col and pd.notna(row.get(xg_col)) else 0.0
 
-            # FOR (offense)
+            # FOR (offense) - use strength label from off_team's perspective
+            s_off = strength_label(off_team)
             for pid in iter_players(off_team):
                 # Corsi/Fenwick/Shots/Goals
-                stats[(pid,s)]['CF'] += 1
-                if not is_block: stats[(pid,s)]['FF'] += 1
-                if is_shot:      stats[(pid,s)]['SF'] += 1
-                if is_goal:      stats[(pid,s)]['GF'] += 1
+                stats[(pid,s_off)]['CF'] += 1
+                if not is_block: stats[(pid,s_off)]['FF'] += 1
+                if is_shot:      stats[(pid,s_off)]['SF'] += 1
+                if is_goal:      stats[(pid,s_off)]['GF'] += 1
                 # xG
-                stats[(pid,s)]['xG'] += xg
+                stats[(pid,s_off)]['xG'] += xg
 
-            # AGAINST (defense)
+            # AGAINST (defense) - use strength label from def_team's perspective
+            s_def = strength_label(def_team)
             for pid in iter_players(def_team):
-                stats[(pid,s)]['CA'] += 1
-                if not is_block: stats[(pid,s)]['FA'] += 1
-                if is_shot:      stats[(pid,s)]['SA'] += 1
-                if is_goal:      stats[(pid,s)]['GA'] += 1
-                stats[(pid,s)]['xGA'] += xg
+                stats[(pid,s_def)]['CA'] += 1
+                if not is_block: stats[(pid,s_def)]['FA'] += 1
+                if is_shot:      stats[(pid,s_def)]['SA'] += 1
+                if is_goal:      stats[(pid,s_def)]['GA'] += 1
+                stats[(pid,s_def)]['xGA'] += xg
             return
 
         # PENALTIES  -> PF/PA (penalized team is eventTeam)
         if evt in ('PENL','PEN','PENALTY'):
             penalized = team
             benefited = other[team]
+            s_ben = strength_label(benefited)
+            s_pen = strength_label(penalized)
             for pid in iter_players(benefited):
-                stats[(pid,s)]['PF'] += 1
+                stats[(pid,s_ben)]['PF'] += 1
             for pid in iter_players(penalized):
-                stats[(pid,s)]['PA'] += 1
+                stats[(pid,s_pen)]['PA'] += 1
             return
 
         # Giveaways / Takeaways if you still want them in this table (optional)
         if evt in ('GIVE','GIVEAWAY'):
             gw, op = team, other[team]
-            for pid in iter_players(gw): stats[(pid,s)]['GIVE_for'] += 1
-            for pid in iter_players(op): stats[(pid,s)]['GIVE_against'] += 1
+            s_gw = strength_label(gw)
+            s_op = strength_label(op)
+            for pid in iter_players(gw): stats[(pid,s_gw)]['GIVE_for'] += 1
+            for pid in iter_players(op): stats[(pid,s_op)]['GIVE_against'] += 1
             return
         if evt in ('TAKE','TAKEAWAY'):
             tk, op = team, other[team]
-            for pid in iter_players(tk): stats[(pid,s)]['TAKE_for'] += 1
-            for pid in iter_players(op): stats[(pid,s)]['TAKE_against'] += 1
+            s_tk = strength_label(tk)
+            s_op = strength_label(op)
+            for pid in iter_players(tk): stats[(pid,s_tk)]['TAKE_for'] += 1
+            for pid in iter_players(op): stats[(pid,s_op)]['TAKE_against'] += 1
             return
 
     # ---- Main timeline sweep ----
@@ -4249,15 +4277,14 @@ def on_ice_stats_by_player_strength(
         # 1) Attribute gameplay at this time using current on-ice
         plays = df[(df['elapsedTime']==ts) & (~df['Event'].isin(['ON','OFF']))]
         if not plays.empty:
-            s = strength_label()
             for _, r in plays.iterrows():
-                attribute_play(r, s)
+                attribute_play(r)
 
         # 2) TOI from prev_t -> ts
         if ts > prev_t:
             dt = ts - prev_t
-            s = strength_label()
             for tm in (t1, t2):
+                s = strength_label(tm)
                 for pid in iter_players(tm):
                     toi[(pid,s)] += dt
             prev_t = ts
@@ -4280,8 +4307,8 @@ def on_ice_stats_by_player_strength(
     game_end = int(df['elapsedTime'].max())
     if game_end > prev_t:
         dt = game_end - prev_t
-        s = strength_label()
         for tm in (t1, t2):
+            s = strength_label(tm)
             for pid in iter_players(tm):
                 toi[(pid,s)] += dt
 
@@ -4380,9 +4407,18 @@ def combo_on_ice_stats(
 
     # helpers
     def strength_label():
+        """
+        Return strength label from focus_team's perspective.
+        """
         l = len(sk_on[t1]); r = len(sk_on[t2])
         g1 = len(g_on[t1]) > 0; g2 = len(g_on[t2]) > 0
-        return f"{l}{'' if g1 else '*'}v{r}{'' if g2 else '*'}"
+        left = f"{l}{'' if g1 else '*'}"
+        right = f"{r}{'' if g2 else '*'}"
+        
+        # If focus_team is t2, flip the perspective
+        if focus_team == t2:
+            return f"{right}v{left}"
+        return f"{left}v{right}"
 
     def players_for_combo(team):
         base = list(sk_on[team])
@@ -4671,10 +4707,21 @@ def combo_on_ice_stats_both_teams(
             }
 
     # helpers ------------------------------------------------------------------
-    def strength_label():
+    def strength_label(team=None):
+        """
+        Return strength label from the perspective of the given team.
+        If team is None, returns from t1's perspective (for backward compatibility).
+        If team is specified, returns the label showing that team's skaters first.
+        """
         l = len(sk_on[t1]); r = len(sk_on[t2])
         g1 = len(g_on[t1]) > 0; g2 = len(g_on[t2]) > 0
-        return f"{l}{'' if g1 else '*'}v{r}{'' if g2 else '*'}"
+        left = f"{l}{'' if g1 else '*'}"
+        right = f"{r}{'' if g2 else '*'}"
+        
+        # If team is specified and it's t2, flip the perspective
+        if team == t2:
+            return f"{right}v{left}"
+        return f"{left}v{right}"
 
     def on_ice_players(team):
         base = list(sk_on[team])
@@ -4686,9 +4733,10 @@ def combo_on_ice_stats_both_teams(
     TOI = defaultdict(float)
     ST  = defaultdict(lambda: defaultdict(float))  # stats
 
-    def add_toi_for_both(dt, s):
-        # Attribute time to both sides' combo rows
+    def add_toi_for_both(dt):
+        # Attribute time to both sides' combo rows with their respective strength labels
         for focus in (t1, t2):
+            s = strength_label(focus)
             opp = other[focus]
             tp = on_ice_players(focus)
             op = on_ice_players(opp)
@@ -4702,11 +4750,12 @@ def combo_on_ice_stats_both_teams(
                 for oc in o_combos:
                     TOI[(focus, tc, oc, s)] += dt
 
-    def add_play_for_both(evt, evt_team, xg_val, s):
-        # Attribute a play to both sides' rows
+    def add_play_for_both(evt, evt_team, xg_val):
+        # Attribute a play to both sides' rows with their respective strength labels
         if evt not in ('GOAL','SHOT','MISS','BLOCK','PENL','PEN','PENALTY'):
             return
         for focus in (t1, t2):
+            s = strength_label(focus)
             opp = other[focus]
             tp = on_ice_players(focus)
             op = on_ice_players(opp)
@@ -4761,8 +4810,6 @@ def combo_on_ice_stats_both_teams(
     prev_t = 0
 
     for ts in times:
-        s = strength_label()
-
         # Play events at ts (use current on-ice state)
         plays = df[(df['elapsedTime']==ts) & (~df['Event'].isin(['ON','OFF']))]
         if not plays.empty:
@@ -4772,11 +4819,11 @@ def combo_on_ice_stats_both_teams(
                 if team not in (t1, t2):
                     continue
                 xg_val = float(r[xg_col]) if xg_col and pd.notna(r.get(xg_col)) else None
-                add_play_for_both(evt, team, xg_val, s)
+                add_play_for_both(evt, team, xg_val)
 
         # TOI from prev_t -> ts
         if ts > prev_t:
-            add_toi_for_both(ts - prev_t, s)
+            add_toi_for_both(ts - prev_t)
             prev_t = ts
 
         # Apply OFF/ON at ts (already ordered: OFF then ON)
@@ -4796,7 +4843,7 @@ def combo_on_ice_stats_both_teams(
     # Close final segment
     game_end = int(df['elapsedTime'].max())
     if game_end > prev_t:
-        add_toi_for_both(game_end - prev_t, strength_label())
+        add_toi_for_both(game_end - prev_t)
 
     # -------- build base output ---------------------------------------------
     def combo_label(ids):
@@ -4942,21 +4989,33 @@ def team_strength_aggregates(
     g_on  = {t1: set(), t2: set()}
 
     # helpers
-    def strength_label():
+    def strength_label(team=None):
+        """
+        Return strength label from the perspective of the given team.
+        If team is None, returns from t1's perspective (for backward compatibility).
+        If team is specified, returns the label showing that team's skaters first.
+        """
         l = len(sk_on[t1]); r = len(sk_on[t2])
         g1 = len(g_on[t1]) > 0; g2 = len(g_on[t2]) > 0
         # add '*' if no goalie on that side (optional but handy for pulled-goalie states)
-        return f"{l}{'' if g1 else '*'}v{r}{'' if g2 else '*'}"
+        left = f"{l}{'' if g1 else '*'}"
+        right = f"{r}{'' if g2 else '*'}"
+        
+        # If team is specified and it's t2, flip the perspective
+        if team == t2:
+            return f"{right}v{left}"
+        return f"{left}v{right}"
 
     # accumulators keyed by (team, strength)
     TOI = defaultdict(float)
     ST  = defaultdict(lambda: defaultdict(float))
 
-    def add_toi(dt, s):
-        TOI[(t1, s)] += dt
-        TOI[(t2, s)] += dt
+    def add_toi(dt):
+        """Add TOI for both teams with their respective strength labels"""
+        TOI[(t1, strength_label(t1))] += dt
+        TOI[(t2, strength_label(t2))] += dt
 
-    def add_play(evt, evt_team, xg_val, s):
+    def add_play(evt, evt_team, xg_val):
         if evt not in ('GOAL','SHOT','MISS','BLOCK','PENL','PEN','PENALTY'):
             return
 
@@ -4976,6 +5035,7 @@ def team_strength_aggregates(
                 xg_eff = float(xg_val) if xg_val is not None else 0.0
 
             def push(team_key, for_offense: bool):
+                s = strength_label(team_key)
                 if for_offense:
                     ST[(team_key, s)]['CF'] += 1
                     if not is_block: ST[(team_key, s)]['FF'] += 1
@@ -4996,16 +5056,16 @@ def team_strength_aggregates(
         else:
             # penalties: eventTeam is penalized
             penalized = evt_team
-            ST[(penalized, s)]['PA'] += 1
-            ST[(other[penalized], s)]['PF'] += 1
+            s_pen = strength_label(penalized)
+            s_other = strength_label(other[penalized])
+            ST[(penalized, s_pen)]['PA'] += 1
+            ST[(other[penalized], s_other)]['PF'] += 1
 
     # ---- sweep the timeline
     times = df['elapsedTime'].dropna().astype(int).unique()
     prev_t = 0
 
     for ts in times:
-        s = strength_label()
-
         # apply all non-ON/OFF events at ts
         plays = df[(df['elapsedTime']==ts) & (~df['Event'].isin(['ON','OFF']))]
         if not plays.empty:
@@ -5015,11 +5075,11 @@ def team_strength_aggregates(
                 if team not in (t1, t2):
                     continue
                 xg_val = float(r[xg_col]) if xg_col and pd.notna(r.get(xg_col)) else None
-                add_play(evt, team, xg_val, s)
+                add_play(evt, team, xg_val)
 
         # accrue TOI from prev_t to ts
         if ts > prev_t:
-            add_toi(ts - prev_t, s)
+            add_toi(ts - prev_t)
             prev_t = ts
 
         # process OFF then ON at ts (already ordered)
@@ -5038,7 +5098,7 @@ def team_strength_aggregates(
     # close final segment
     game_end = int(df['elapsedTime'].max())
     if game_end > prev_t:
-        add_toi(game_end - prev_t, strength_label())
+        add_toi(game_end - prev_t)
 
     # ---- build output
     rows = []
