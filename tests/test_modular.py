@@ -13,19 +13,20 @@ def test_imports():
     """Test that all imports work."""
     print("Testing imports...")
     
-    # Test modular imports
-    from scrapernhl.scrapers.teams import scrapeTeams
-    from scrapernhl.scrapers.schedule import scrapeSchedule
-    from scrapernhl.scrapers.standings import scrapeStandings
-    from scrapernhl.scrapers.roster import scrapeRoster
-    from scrapernhl.scrapers.stats import scrapeTeamStats
-    from scrapernhl.scrapers.draft import scrapeDraftData
-    from scrapernhl.scrapers.games import scrapePlays
+    # Test modular imports (new structure uses nhl.scrapers)
+    from scrapernhl.nhl.scrapers.teams import scrapeTeams
+    from scrapernhl.nhl.scrapers.schedule import scrapeSchedule
+    from scrapernhl.nhl.scrapers.standings import scrapeStandings
+    from scrapernhl.nhl.scrapers.roster import scrapeRoster
+    from scrapernhl.nhl.scrapers.stats import scrapeTeamStats
+    from scrapernhl.nhl.scrapers.draft import scrapeDraftData
+    from scrapernhl.nhl.scrapers.games import scrapePlays
     
     print("✓ Modular imports successful")
     
     # Test backward compatible imports
-    from scrapernhl import scrapeTeams, scrapeSchedule, fetch_json
+    from scrapernhl import scrapeTeams, scrapeSchedule
+    from scrapernhl.core.http import fetch_json
     
     print("✓ Backward compatible imports successful")
 
@@ -51,13 +52,15 @@ def test_lazy_loading():
     """Test that legacy functions load lazily."""
     print("\nTesting lazy loading...")
     
-    # This should work without importing heavy dependencies immediately
-    from scrapernhl import scraper
+    # Test that we can import the main scraper module
+    from scrapernhl.nhl import scraper
     
     # Check that we can import the module without triggering legacy imports
     print("✓ Main scraper module imports without loading legacy code")
     
-    # Note: Actually accessing legacy functions requires xgboost
+    # Test that legacy functions are accessible through the main package
+    from scrapernhl import scrape_game
+    print("✓ Legacy functions accessible via backward compatibility")
     # This is expected - they should only load when explicitly used
     print("✓ Lazy loading mechanism works (legacy functions load on-demand)")
 
