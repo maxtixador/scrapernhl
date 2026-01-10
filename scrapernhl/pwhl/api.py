@@ -156,6 +156,7 @@ def get_scorebar(
     limit: int = 1000,
     fmt: str = 'json',
     division_id: int = -1,
+    season_id: Optional[int] = None,
     config: PWHLConfig = None
 ) -> Dict[str, Any]:
     """
@@ -167,6 +168,7 @@ def get_scorebar(
         limit: Maximum number of games (default: 1000)
         fmt: Response format ('json' or 'jsonp')
         division_id: Division ID filter (-1 for all)
+        season_id: Explicit season id (defaults to current season)
         config: PWHLConfig instance
     
     Returns:
@@ -176,16 +178,45 @@ def get_scorebar(
         >>> scorebar = get_scorebar(days_ahead=7, days_back=2)
         >>> print(f"Found {len(scorebar['games'])} games")
     """
+    from datetime import datetime, timedelta
+    
+    # Calculate date range (API requires explicit dates, not relative days)
+    today = datetime.now()
+    date_from = (today - timedelta(days=days_back)).strftime('%Y-%m-%d')
+    date_to = (today + timedelta(days=days_ahead)).strftime('%Y-%m-%d')
+
+    season = season_id
+    if season is None:
+        try:
+            bootstrap = get_bootstrap(config=config)
+            if isinstance(bootstrap, dict):
+                seasons = bootstrap.get('SiteKit', {}).get('Seasons') or bootstrap.get('seasons', [])
+                if isinstance(seasons, list):
+                    current = next((s for s in seasons if s.get('is_current')), None)
+                    if current and current.get('id'):
+                        season = current['id']
+        except Exception:
+            season = None
+
+    if season is None:
+        season = config.DEFAULT_SEASON if config else PWHLConfig.DEFAULT_SEASON
+    
+    params = {
+        'date_from': date_from,
+        'date_to': date_to,
+        'season_id': season,
+        'limit': limit,
+        'fmt': fmt,
+        'site_id': PWHLConfig.SITE_ID,
+    }
+    if division_id != -1:
+        params['division_id'] = division_id
+
     return fetch_api(
         feed='modulekit',
         view='scorebar',
-        numberofdaysahead=days_ahead,
-        numberofdaysback=days_back,
-        limit=limit,
-        fmt=fmt,
-        division_id=division_id,
-        site_id=PWHLConfig.SITE_ID,
-        config=config
+        config=config,
+        **params
     )
 
 

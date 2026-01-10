@@ -31,7 +31,7 @@ class QMJHLConfig:
     SITE_ID = "0"
     
     # Defaults
-    DEFAULT_SEASON = "76"  # Update to current QMJHL season
+    DEFAULT_SEASON = "211"  # 2024-25 QMJHL season
     
     # Rate limiting
     RATE_LIMIT_CALLS = 2
@@ -158,19 +158,49 @@ def get_scorebar(
     limit: int = 1000,
     fmt: str = 'json',
     division_id: int = -1,
+    season_id: Optional[int] = None,
     config: QMJHLConfig = None
 ) -> Dict[str, Any]:
     """Get live games and upcoming schedule (scorebar)."""
+    from datetime import datetime, timedelta
+    
+    # Calculate date range (API requires explicit dates, not relative days)
+    today = datetime.now()
+    date_from = (today - timedelta(days=days_back)).strftime('%Y-%m-%d')
+    date_to = (today + timedelta(days=days_ahead)).strftime('%Y-%m-%d')
+
+    season = season_id
+    if season is None:
+        try:
+            bootstrap = get_bootstrap(config=config)
+            if isinstance(bootstrap, dict):
+                seasons = bootstrap.get('SiteKit', {}).get('Seasons') or bootstrap.get('seasons', [])
+                if isinstance(seasons, list):
+                    current = next((s for s in seasons if s.get('is_current')), None)
+                    if current and current.get('id'):
+                        season = current['id']
+        except Exception:
+            season = None
+
+    if season is None:
+        season = config.DEFAULT_SEASON if config else QMJHLConfig.DEFAULT_SEASON
+    
+    params = {
+        'date_from': date_from,
+        'date_to': date_to,
+        'season_id': season,
+        'limit': limit,
+        'fmt': fmt,
+        'site_id': QMJHLConfig.SITE_ID,
+    }
+    if division_id != -1:
+        params['division_id'] = division_id
+
     return fetch_api(
         feed='modulekit',
         view='scorebar',
-        numberofdaysahead=days_ahead,
-        numberofdaysback=days_back,
-        limit=limit,
-        fmt=fmt,
-        division_id=division_id,
-        site_id=QMJHLConfig.SITE_ID,
-        config=config
+        config=config,
+        **params
     )
 
 
