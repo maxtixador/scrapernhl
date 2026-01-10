@@ -20,10 +20,12 @@ Python package for scraping and analyzing NHL data with built-in Expected Goals 
 - **Advanced Analytics**: Corsi, Fenwick, scoring chances, TOI, zone starts
 
 ### Multi-League Support
-- **PWHL, AHL, OHL, WHL, QMJHL**: Comprehensive API modules for 5 HockeyTech leagues
-- **15+ Endpoints**: Teams, schedules, stats, rosters, games, standings
+- **PWHL, AHL, OHL, WHL, QMJHL**: Comprehensive scraper modules for 5 HockeyTech leagues
+- **Complete Coverage**: Schedule, teams, standings, player stats, rosters for all leagues
 - **Unified Interface**: Same API structure across all leagues
+- **DataFrame Output**: pandas/polars support with json_normalize
 - **Play-by-Play Scrapers**: Enhanced cleaning with shot+goal merging ("nhlify")
+- **Caching**: Built-in TTL-based caching for all scrapers
 - **Rate Limited**: Automatic 2 req/sec enforcement
 - **See**: `MULTI_LEAGUE_API_FRAMEWORK.md` and `notebooks/multi_league_api_examples.ipynb`
 

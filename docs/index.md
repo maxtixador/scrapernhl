@@ -48,9 +48,10 @@ rosters = game_data.rosters
 
 ### Multi-League Support
 - **5 Leagues**: PWHL, AHL, OHL, WHL, QMJHL
-- Unified API across all leagues
-- 15+ functions per league (75 total endpoints)
-- See [Multi-League API Examples](multi-league-api-examples.md) and [Quick Reference](api-quick-reference.md)
+- Complete scraper coverage: Schedule, Teams, Standings, Player Stats, Rosters
+- Unified interface across all leagues
+- Built-in caching and error handling
+- See [Multi-League Scraper Reference](multi-league-scraper-reference.md)
 
 ### Analytics
 - Pre-trained XGBoost Expected Goals (xG) model
@@ -81,11 +82,10 @@ rosters = game_data.rosters
 - [Getting Started](getting-started.md) - Installation and setup
 - [API Reference](api.md) - Complete NHL API documentation
 
-### Multi-League APIs (NEW!)
-- [🚀 Quick Reference](api-quick-reference.md) - Fast lookup for all 15 functions
-- [📚 Complete Examples](multi-league-api-examples.md) - Comprehensive guide with patterns
-- [📓 Interactive Notebook](../notebooks/multi_league_api_examples.ipynb) - Jupyter examples
-- [🧪 Test Suite](../test_multi_league_api.py) - Reference implementations
+### Multi-League Scrapers
+- [Scraper Reference](multi-league-scraper-reference.md) - Complete API for all 5 leagues
+- [Demo Notebook](../notebooks/multi_league_demo.ipynb) - Interactive examples
+- [Player Demo](../notebooks/player_demo.ipynb) - Cross-league player data
 
 ### Examples
 - [CLI Examples](examples/cli.md) - Command-line usage

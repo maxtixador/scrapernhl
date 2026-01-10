@@ -341,26 +341,34 @@ def get_skater_stats(
     conference: str = '-1',
     config: WHLConfig = None
 ) -> Dict[str, Any]:
-    """Get skater statistics with filtering and pagination."""
+    """Get skater statistics with filtering and pagination.
+
+    Note: site_id parameter is ignored for compatibility but not sent to API.
+    """
     if season is None:
         season = WHLConfig.DEFAULT_SEASON if config is None else config.DEFAULT_SEASON
-    if site_id is None:
-        site_id = int(WHLConfig.SITE_ID)
-    
-    return fetch_api(
-        feed='statviewfeed',
-        view='players',
-        season=season,
-        team=team,
-        rookies=rookies,
-        statsType=stats_type,
-        first=first,
-        limit=limit,
-        site_id=site_id,
-        division=division,
-        conference=conference,
-        config=config
-    )
+
+    params = {
+        'feed': 'statviewfeed',
+        'view': 'players',
+        'season': season,
+        'first': first,
+        'limit': limit
+    }
+
+    # Add optional filters only if they're not default values
+    if team != '-1':
+        params['team'] = team
+    if rookies != 0:
+        params['rookies'] = rookies
+    if stats_type != 'standard':
+        params['statsType'] = stats_type
+    if division != '-1':
+        params['division'] = division
+    if conference != '-1':
+        params['conference'] = conference
+
+    return fetch_api(config=config, **params)
 
 
 def get_goalie_stats(
@@ -376,27 +384,39 @@ def get_goalie_stats(
     conference: str = '-1',
     config: WHLConfig = None
 ) -> Dict[str, Any]:
-    """Get goalie statistics with filtering and pagination."""
+    """Get goalie statistics with filtering and pagination.
+
+    Note: WHL API uses position='goalies' to filter for goalie-specific statistics
+    (GAA, save percentage, wins, shutouts, etc.).
+    Also, site_id parameter is ignored for compatibility but not sent to API.
+    """
     if season is None:
         season = WHLConfig.DEFAULT_SEASON if config is None else config.DEFAULT_SEASON
-    if site_id is None:
-        site_id = int(WHLConfig.SITE_ID)
-    
-    return fetch_api(
-        feed='statviewfeed',
-        view='goalies',
-        season=season,
-        team=team,
-        rookies=rookies,
-        statsType=stats_type,
-        first=first,
-        limit=limit,
-        qualified=qualified,
-        site_id=site_id,
-        division=division,
-        conference=conference,
-        config=config
-    )
+
+    params = {
+        'feed': 'statviewfeed',
+        'view': 'players',
+        'position': 'goalies',
+        'season': season,
+        'first': first,
+        'limit': limit
+    }
+
+    # Add optional filters only if they're not default values
+    if team != '-1':
+        params['team'] = team
+    if rookies != 0:
+        params['rookies'] = rookies
+    if stats_type != 'standard':
+        params['statsType'] = stats_type
+    if qualified != 'all':
+        params['qualified'] = qualified
+    if division != '-1':
+        params['division'] = division
+    if conference != '-1':
+        params['conference'] = conference
+
+    return fetch_api(config=config, **params)
 
 
 def get_player_profile(
