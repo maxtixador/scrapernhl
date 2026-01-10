@@ -1,0 +1,694 @@
+"""
+PWHL Comprehensive API Scraper
+
+A complete scraper for the Professional Women's Hockey League (PWHL)
+covering all major API endpoints: games, schedules, teams, rosters, and player stats.
+
+This module can be adapted for other HockeyTech leagues (AHL, OHL, WHL, QMJHL).
+"""
+
+import requests
+import json
+import re
+import time
+from typing import Dict, List, Any, Optional, Union
+from functools import wraps
+import logging
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+
+class PWHLConfig:
+    """Configuration for PWHL API endpoints."""
+    BASE_URL = "https://lscluster.hockeytech.com/feed/index.php"
+    API_KEY = "446521baf8c38984"
+    CLIENT_CODE = "pwhl"
+    LEAGUE_ID = "1"
+    SITE_ID = "0"
+    DEFAULT_SEASON = "8"
+    LANG = "en"
+
+
+class RateLimiter:
+    """Simple rate limiter to be respectful to the API."""
+    def __init__(self, calls_per_second: float = 2):
+        self.min_interval = 1.0 / calls_per_second
+        self.last_call = 0
+    
+    def wait(self):
+        """Wait if necessary to maintain rate limit."""
+        elapsed = time.time() - self.last_call
+        if elapsed < self.min_interval:
+            time.sleep(self.min_interval - elapsed)
+        self.last_call = time.time()
+
+
+# Global rate limiter
+_rate_limiter = RateLimiter(calls_per_second=2)
+
+
+def rate_limited(func):
+    """Decorator to apply rate limiting to API calls."""
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        _rate_limiter.wait()
+        return func(*args, **kwargs)
+    return wrapper
+
+
+def clean_jsonp(response_text: str) -> str:
+    """
+    Remove JSONP callback wrapper from response.
+    
+    Handles formats like:
+    - angular.callbacks._X({...})
+    - jsonp_123456({...})
+    - ([...])
+    """
+    text = response_text.strip()
+    
+    # Remove Angular callback: angular.callbacks._X({...})
+    if text.startswith('angular.callbacks'):
+        match = re.search(r'\((.*)\);?\s*$', text, re.DOTALL)
+        if match:
+            text = match.group(1)
+    
+    # Remove jsonp callback: jsonp_123456({...})
+    elif text.startswith('jsonp_'):
+        match = re.search(r'\((.*)\);?\s*$', text, re.DOTALL)
+        if match:
+            text = match.group(1)
+    
+    # Remove bare parentheses: ([...]) or ({...})
+    elif text.startswith('([') or text.startswith('({'):
+        text = text[1:-1]
+    
+    return text
+
+
+@rate_limited
+def fetch_api(
+    feed: str,
+    view: str,
+    config: PWHLConfig = None,
+    **params
+) -> Dict[str, Any]:
+    """
+    Generic API fetch function for PWHL/HockeyTech endpoints.
+    
+    Args:
+        feed: API feed type (e.g., 'statviewfeed', 'modulekit')
+        view: View type (e.g., 'schedule', 'players', 'teams')
+        config: PWHLConfig instance (uses default if None)
+        **params: Additional query parameters
+    
+    Returns:
+        Parsed JSON response
+    
+    Raises:
+        requests.RequestException: On HTTP errors
+        json.JSONDecodeError: On JSON parsing errors
+    """
+    if config is None:
+        config = PWHLConfig()
+    
+    # Build query parameters
+    query_params = {
+        'feed': feed,
+        'view': view,
+        'key': config.API_KEY,
+        'client_code': config.CLIENT_CODE,
+        'lang': config.LANG,
+        'league_id': config.LEAGUE_ID,
+        **params
+    }
+    
+    try:
+        logger.debug(f"Fetching {view} from {feed}")
+        response = requests.get(config.BASE_URL, params=query_params, timeout=10)
+        response.raise_for_status()
+        
+        # Clean JSONP wrapper
+        cleaned = clean_jsonp(response.text)
+        
+        # Parse JSON
+        data = json.loads(cleaned)
+        return data
+        
+    except requests.RequestException as e:
+        logger.error(f"HTTP error fetching {view}: {e}")
+        raise
+    except json.JSONDecodeError as e:
+        logger.error(f"JSON decode error for {view}: {e}")
+        logger.debug(f"Response text: {response.text[:200]}")
+        raise
+
+
+# ============================================================================
+# GAMES & SCHEDULE
+# ============================================================================
+
+def get_scorebar(
+    days_ahead: int = 6,
+    days_back: int = 0,
+    limit: int = 1000,
+    fmt: str = 'json',
+    division_id: int = -1,
+    config: PWHLConfig = None
+) -> Dict[str, Any]:
+    """
+    Get live games and upcoming schedule (scorebar).
+    
+    Args:
+        days_ahead: Number of days ahead to fetch (default: 6)
+        days_back: Number of days back to fetch (default: 0)
+        limit: Maximum number of games (default: 1000)
+        fmt: Response format ('json' or 'jsonp')
+        division_id: Division ID filter (-1 for all)
+        config: PWHLConfig instance
+    
+    Returns:
+        Scorebar data with games
+    
+    Example:
+        >>> scorebar = get_scorebar(days_ahead=7, days_back=2)
+        >>> print(f"Found {len(scorebar['games'])} games")
+    """
+    return fetch_api(
+        feed='modulekit',
+        view='scorebar',
+        numberofdaysahead=days_ahead,
+        numberofdaysback=days_back,
+        limit=limit,
+        fmt=fmt,
+        division_id=division_id,
+        site_id=PWHLConfig.SITE_ID,
+        config=config
+    )
+
+
+def get_schedule(
+    team_id: int = -1,
+    season: Union[int, str] = None,
+    month: int = -1,
+    location: str = 'homeaway',
+    config: PWHLConfig = None
+) -> Dict[str, Any]:
+    """
+    Get full season schedule.
+    
+    Args:
+        team_id: Team ID (use -1 for all teams)
+        season: Season ID (uses default if None)
+        month: Month filter (-1 for all months, 1-12 for specific month)
+        location: Game location filter ('homeaway', 'home', 'away')
+        config: PWHLConfig instance
+    
+    Returns:
+        Schedule data
+    
+    Example:
+        >>> schedule = get_schedule()  # All teams
+        >>> schedule = get_schedule(team_id=2, location='home')  # Home games only
+    """
+    if season is None:
+        season = PWHLConfig.DEFAULT_SEASON if config is None else config.DEFAULT_SEASON
+    
+    return fetch_api(
+        feed='statviewfeed',
+        view='schedule',
+        team=team_id,
+        season=season,
+        month=month,
+        location=location,
+        site_id=PWHLConfig.SITE_ID,
+        conference_id=-1,
+        division_id=-1,
+        config=config
+    )
+
+
+def get_game_preview(game_id: int, config: PWHLConfig = None) -> Dict[str, Any]:
+    """
+    Get game preview data (pre-game information).
+    
+    Args:
+        game_id: Game ID
+        config: PWHLConfig instance
+    
+    Returns:
+        Game preview data
+    """
+    return fetch_api(
+        feed='statviewfeed',
+        view='gameCenterPreview',
+        game_id=game_id,
+        config=config
+    )
+
+
+def get_game_summary(game_id: int, config: PWHLConfig = None) -> Dict[str, Any]:
+    """
+    Get game summary (post-game stats and summary).
+    
+    Args:
+        game_id: Game ID
+        config: PWHLConfig instance
+    
+    Returns:
+        Game summary data
+    """
+    return fetch_api(
+        feed='statviewfeed',
+        view='gameSummary',
+        game_id=game_id,
+        config=config
+    )
+
+
+def get_play_by_play(game_id: int, config: PWHLConfig = None) -> List[Dict[str, Any]]:
+    """
+    Get play-by-play events for a game.
+    
+    Args:
+        game_id: Game ID
+        config: PWHLConfig instance
+    
+    Returns:
+        List of play-by-play events
+    
+    Example:
+        >>> pbp = get_play_by_play(210)
+        >>> print(f"Found {len(pbp)} events")
+    """
+    data = fetch_api(
+        feed='statviewfeed',
+        view='gameCenterPlayByPlay',
+        game_id=game_id,
+        config=config
+    )
+    
+    # Extract events array if wrapped
+    if isinstance(data, list):
+        return data
+    elif isinstance(data, dict) and 'events' in data:
+        return data['events']
+    return data
+
+
+# ============================================================================
+# TEAMS
+# ============================================================================
+
+def get_teams(season: Union[int, str] = None, config: PWHLConfig = None) -> Dict[str, Any]:
+    """
+    Get all teams for a season.
+    
+    Args:
+        season: Season ID (uses default if None)
+        config: PWHLConfig instance
+    
+    Returns:
+        Teams data
+    """
+    if season is None:
+        season = PWHLConfig.DEFAULT_SEASON if config is None else config.DEFAULT_SEASON
+    
+    return fetch_api(
+        feed='statviewfeed',
+        view='teamsForSeason',
+        season=season,
+        config=config
+    )
+
+
+def get_standings(
+    season: Union[int, str] = None,
+    context: str = 'overall',
+    special: str = 'false',
+    group_by: str = 'division',
+    config: PWHLConfig = None
+) -> Dict[str, Any]:
+    """
+    Get team standings with grouping options.
+    
+    Args:
+        season: Season ID (uses default if None)
+        context: Stats context ('overall', 'home', 'away')
+        special: Include special team stats ('true' or 'false')
+        group_by: How to group teams ('division', 'conference', 'league')
+        config: PWHLConfig instance
+    
+    Returns:
+        Standings data
+    
+    Example:
+        >>> standings = get_standings()  # Overall standings by division
+        >>> standings = get_standings(context='home', group_by='league')
+    """
+    if season is None:
+        season = PWHLConfig.DEFAULT_SEASON if config is None else config.DEFAULT_SEASON
+    
+    return fetch_api(
+        feed='statviewfeed',
+        view='teams',
+        groupTeamsBy=group_by,
+        context=context,
+        special=special,
+        season=season,
+        site_id=PWHLConfig.SITE_ID,
+        config=config
+    )
+
+
+def get_roster(
+    team_id: int,
+    season_id: Union[int, str] = None,
+    roster_status: str = 'undefined',
+    config: PWHLConfig = None
+) -> Dict[str, Any]:
+    """
+    Get team roster with status filtering.
+    
+    Args:
+        team_id: Team ID
+        season_id: Season ID (uses default if None)
+        roster_status: Roster status filter ('undefined' for all, 'active', 'inactive', etc.)
+        config: PWHLConfig instance
+    
+    Returns:
+        Roster data with players
+    
+    Example:
+        >>> roster = get_roster(team_id=2)
+        >>> roster = get_roster(team_id=2, roster_status='active')
+        >>> print(f"Found {len(roster['players'])} players")
+    """
+    if season_id is None:
+        season_id = PWHLConfig.DEFAULT_SEASON if config is None else config.DEFAULT_SEASON
+    
+    return fetch_api(
+        feed='statviewfeed',
+        view='roster',
+        team_id=team_id,
+        season_id=season_id,
+        rosterstatus=roster_status,
+        config=config
+    )
+
+
+# ============================================================================
+# PLAYER STATISTICS
+# ============================================================================
+
+def get_skater_stats(
+    season: Union[int, str] = None,
+    sort: str = 'points',
+    team: str = 'all',
+    rookies: int = 0,
+    stats_type: str = 'standard',
+    first: int = 0,
+    limit: int = 20,
+    config: PWHLConfig = None
+) -> Dict[str, Any]:
+    """
+    Get skater statistics.
+    
+    Args:
+        season: Season ID (uses default if None)
+        sort: Sort field ('points', 'goals', 'assists', 'plusminus', etc.)
+        team: Team filter ('all' or team ID)
+        rookies: Filter rookies (0=all, 1=rookies only)
+        stats_type: Stats type ('standard', 'advanced', etc.)
+        first: Pagination start index
+        limit: Number of results to return
+        config: PWHLConfig instance
+    
+    Returns:
+        Skater stats data
+    
+    Example:
+        >>> skaters = get_skater_stats(sort='goals', limit=50)
+        >>> top_scorer = skaters['players'][0]
+    """
+    if season is None:
+        season = PWHLConfig.DEFAULT_SEASON if config is None else config.DEFAULT_SEASON
+    
+    return fetch_api(
+        feed='statviewfeed',
+        view='players',
+        season=season,
+        team=team,
+        position='skaters',
+        rookies=rookies,
+        statsType=stats_type,
+        rosterstatus='undefined',
+        site_id=PWHLConfig.SITE_ID,
+        first=first,
+        limit=limit,
+        sort=sort,
+        division=-1,
+        conference=-1,
+        config=config
+    )
+
+
+def get_goalie_stats(
+    season: Union[int, str] = None,
+    sort: str = 'gaa',
+    team: str = 'all',
+    rookies: int = 0,
+    stats_type: str = 'standard',
+    first: int = 0,
+    limit: int = 20,
+    qualified: str = 'all',
+    config: PWHLConfig = None
+) -> Dict[str, Any]:
+    """
+    Get goalie statistics.
+    
+    Args:
+        season: Season ID (uses default if None)
+        sort: Sort field ('gaa', 'savePct', 'wins', 'shutouts', etc.)
+        team: Team filter ('all' or team ID)
+        rookies: Filter rookies (0=all, 1=rookies only)
+        stats_type: Stats type ('standard', 'advanced', etc.)
+        first: Pagination start index
+        limit: Number of results to return
+        qualified: Filter qualified goalies ('all', 'qualified')
+        config: PWHLConfig instance
+    
+    Returns:
+        Goalie stats data
+    
+    Example:
+        >>> goalies = get_goalie_stats(sort='savePct', qualified='qualified')
+        >>> best_goalie = goalies['players'][0]
+    """
+    if season is None:
+        season = PWHLConfig.DEFAULT_SEASON if config is None else config.DEFAULT_SEASON
+    
+    return fetch_api(
+        feed='statviewfeed',
+        view='players',
+        season=season,
+        team=team,
+        position='goalies',
+        rookies=rookies,
+        statsType=stats_type,
+        rosterstatus='undefined',
+        site_id=PWHLConfig.SITE_ID,
+        first=first,
+        limit=limit,
+        sort=sort,
+        division=-1,
+        conference=-1,
+        qualified=qualified,
+        config=config
+    )
+
+
+def get_player_profile(
+    player_id: int,
+    season_id: Union[int, str] = None,
+    config: PWHLConfig = None
+) -> Dict[str, Any]:
+    """
+    Get individual player profile and stats.
+    
+    Args:
+        player_id: Player ID
+        season_id: Season ID (uses default if None)
+        config: PWHLConfig instance
+    
+    Returns:
+        Player profile data
+    
+    Example:
+        >>> player = get_player_profile(player_id=123)
+        >>> print(f"{player['name']}: {player['stats']['points']} points")
+    """
+    if season_id is None:
+        season_id = PWHLConfig.DEFAULT_SEASON if config is None else config.DEFAULT_SEASON
+    
+    return fetch_api(
+        feed='statviewfeed',
+        view='player',
+        player_id=player_id,
+        season_id=season_id,
+        config=config
+    )
+
+
+# ============================================================================
+# BOOTSTRAP / CONFIG
+# ============================================================================
+
+def get_bootstrap(
+    game_id: int = None,
+    season: str = 'latest',
+    page_name: str = 'scorebar',
+    league_code: str = None,
+    conference: str = None,
+    division: str = None,
+    config: PWHLConfig = None
+) -> Dict[str, Any]:
+    """
+    Get bootstrap/configuration data for initializing the API.
+    
+    Args:
+        game_id: Optional game ID for game-specific bootstrap
+        season: Season ('latest' or specific season ID)
+        page_name: Page name context ('scorebar', 'gamecenter', 'schedule', etc.)
+        league_code: League code filter
+        conference: Conference filter
+        division: Division filter
+        config: PWHLConfig instance
+    
+    Returns:
+        Bootstrap configuration data including teams, divisions, seasons, etc.
+    
+    Example:
+        >>> bootstrap = get_bootstrap()  # Get default config
+        >>> bootstrap = get_bootstrap(game_id=12345, page_name='gamecenter')
+    """
+    params = {
+        'feed': 'statviewfeed',
+        'view': 'bootstrap',
+        'season': season,
+        'pageName': page_name,
+        'site_id': PWHLConfig.SITE_ID,
+        'config': config
+    }
+    
+    # Add optional filters
+    if game_id is not None:
+        params['game_id'] = game_id
+    if league_code is not None:
+        params['league_code'] = league_code
+    if conference is not None:
+        params['conference'] = conference
+    if division is not None:
+        params['division'] = division
+    
+    return fetch_api(**params)
+
+
+# ============================================================================
+# CONVENIENCE FUNCTIONS
+# ============================================================================
+
+def get_all_players(season: Union[int, str] = None, config: PWHLConfig = None) -> Dict[str, List[Dict]]:
+    """
+    Get all players (skaters and goalies) in one call.
+    
+    Args:
+        season: Season ID (uses default if None)
+        config: PWHLConfig instance
+    
+    Returns:
+        Dictionary with 'skaters' and 'goalies' lists
+    
+    Example:
+        >>> all_players = get_all_players()
+        >>> print(f"Skaters: {len(all_players['skaters'])}")
+        >>> print(f"Goalies: {len(all_players['goalies'])}")
+    """
+    skaters_data = get_skater_stats(season=season, config=config)
+    goalies_data = get_goalie_stats(season=season, config=config)
+    
+    return {
+        'skaters': skaters_data.get('players', []) if isinstance(skaters_data, dict) else skaters_data,
+        'goalies': goalies_data.get('players', []) if isinstance(goalies_data, dict) else goalies_data,
+    }
+
+
+def get_team_schedule(team_id: int, season: Union[int, str] = None, config: PWHLConfig = None) -> List[Dict]:
+    """
+    Get schedule for a specific team.
+    
+    Args:
+        team_id: Team ID
+        season: Season ID (uses default if None)
+        config: PWHLConfig instance
+    
+    Returns:
+        List of games for the team
+    """
+    schedule_data = get_schedule(team_id=team_id, season=season, config=config)
+    
+    # Extract games array
+    if isinstance(schedule_data, dict):
+        return schedule_data.get('games', schedule_data.get('schedule', []))
+    return schedule_data
+
+
+def get_game_full_data(game_id: int, config: PWHLConfig = None) -> Dict[str, Any]:
+    """
+    Get comprehensive game data (preview, summary, and play-by-play).
+    
+    Args:
+        game_id: Game ID
+        config: PWHLConfig instance
+    
+    Returns:
+        Dictionary with 'preview', 'summary', and 'play_by_play' data
+    
+    Example:
+        >>> game = get_game_full_data(210)
+        >>> print(f"Events: {len(game['play_by_play'])}")
+    """
+    return {
+        'preview': get_game_preview(game_id, config=config),
+        'summary': get_game_summary(game_id, config=config),
+        'play_by_play': get_play_by_play(game_id, config=config),
+    }
+
+
+__all__ = [
+    'PWHLConfig',
+    'RateLimiter',
+    'fetch_api',
+    # Games & Schedule
+    'get_scorebar',
+    'get_schedule',
+    'get_game_preview',
+    'get_game_summary',
+    'get_play_by_play',
+    # Teams
+    'get_teams',
+    'get_standings',
+    'get_roster',
+    # Player Stats
+    'get_skater_stats',
+    'get_goalie_stats',
+    'get_player_profile',
+    # Bootstrap
+    'get_bootstrap',
+    # Convenience
+    'get_all_players',
+    'get_team_schedule',
+    'get_game_full_data',
+]

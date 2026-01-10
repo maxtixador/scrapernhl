@@ -586,9 +586,6 @@ print(f"Game has {len(pbp)} events")
 
 ---
 
-
----
-
 # PWHL - Professional Women's Hockey League
 
 Complete API access for the Professional Women's Hockey League using the HockeyTech/LeagueStat platform.
@@ -607,51 +604,122 @@ from scrapernhl.pwhl import api
 
 # Get all PWHL teams
 teams = api.get_teams()
+print(f"Found {len(teams.get('teams', []))} teams")
 
 # Get top scorers
 stats = api.get_skater_stats(limit=20)
 
-# Get standings
+# Get current standings
 standings = api.get_standings()
 
-# Get games
+# Get today's games
 games = api.get_scorebar()
 ```
 
 ## PWHL Available Functions
 
-All 15 functions available. See [Quick Reference](api-quick-reference.md) for detailed parameters.
+## Supported Leagues
 
-### Core Data
-- `get_teams()` - All teams
-- `get_scorebar()` - Live games & schedule  
-- `get_standings()` - Standings
+- **PWHL** - Professional Women's Hockey League
+- **AHL** - American Hockey League  
+- **OHL** - Ontario Hockey League
+- **WHL** - Western Hockey League
+- **QMJHL** - Quebec Maritimes Junior Hockey League
 
-### Player Statistics
-- `get_skater_stats()` - Skater stats with filtering
-- `get_goalie_stats()` - Goalie stats with filtering
-- `get_player_profile()` - Player details
-- `get_all_players()` - All players
+## Common API Functions
 
-### Games & Schedule
-- `get_schedule()` - Full schedule
-- `get_team_schedule()` - Team schedule
-- `get_game_preview()` - Game preview
-- `get_game_summary()` - Game summary
-- `get_play_by_play()` - Play-by-play
-- `get_game_full_data()` - All game data
+All 5 leagues support the same 15 functions:
 
-### Team Functions
-- `get_roster()` - Team roster
-- `get_bootstrap()` - Configuration
+| Function | Description |
+|----------|-------------|
+| `get_teams()` | All teams in the league |
+| `get_scorebar()` | Live games and schedule |
+| `get_standings()` | League standings |
+| `get_skater_stats()` | Skater statistics with filtering |
+| `get_goalie_stats()` | Goalie statistics with filtering |
+| `get_player_profile()` | Individual player details |
+| `get_all_players()` | All players (skaters + goalies) |
+| `get_schedule()` | Full season schedule |
+| `get_team_schedule()` | Team-specific schedule |
+| `get_game_preview()` | Pre-game data and lineups |
+| `get_game_summary()` | Game summary and box score |
+| `get_play_by_play()` | Detailed play-by-play data |
+| `get_game_full_data()` | Complete game data (all 3 above) |
+| `get_roster()` | Team roster |
+| `get_bootstrap()` | League configuration |
 
-## PWHL Examples
+## Quick Reference
+
+### Basic Usage (Same for All Leagues)
+
+```python
+# Import your league of choice
+from scrapernhl.pwhl import api  # or ahl, ohl, whl, qmjhl
+
+# Get teams
+teams = api.get_teams()
+
+# Get player stats
+stats = api.get_skater_stats(limit=50)
+
+# Get standings
+standings = api.get_standings(group_by='division')
+
+# Get live games
+games = api.get_scorebar(days_ahead=7)
+```
+
+### Cross-League Comparison
+
+```python
+from scrapernhl.pwhl import api as pwhl
+from scrapernhl.ahl import api as ahl
+from scrapernhl.ohl import api as ohl
+from scrapernhl.whl import api as whl
+from scrapernhl.qmjhl import api as qmjhl
+
+# Compare team counts
+for name, module in [('PWHL', pwhl), ('AHL', ahl), ('OHL', ohl)]:
+    teams = module.get_teams()
+    print(f"{name}: {len(teams.get('teams', []))} teams")
+```
+
+---
+
+## PWHL API
+
+Professional Women's Hockey League API.
+
+### Configuration
+- **API Key**: `446521baf8c38984`
+- **Teams**: 9 teams (Boston, Minnesota, Montréal, New York, Ottawa, Toronto)
+- **Base URL**: `https://lscluster.hockeytech.com/feed/index.php`
+
+### Quick Start
 
 ```python
 from scrapernhl.pwhl import api
 
-# Team dashboard
-def team_dashboard(team_id):
+# Get all PWHL teams
+teams = api.get_teams()
+
+# Get top scorers
+stats = api.get_skater_stats(limit=20)
+
+# Get current standings
+standings = api.get_standings()
+
+# Get today's games
+games = api.get_scorebar()
+```
+
+### Example: Team Dashboard
+
+```python
+from scrapernhl.pwhl import api
+
+def pwhl_team_dashboard(team_id):
+    """Get complete team information."""
     return {
         'roster': api.get_roster(team_id=team_id),
         'schedule': api.get_team_schedule(team_id=team_id),
@@ -659,254 +727,237 @@ def team_dashboard(team_id):
         'goalies': api.get_goalie_stats(team=str(team_id), limit=10)
     }
 
-# Get leaders
-leaders = api.get_skater_stats(limit=10)
+# Get Boston Fleet dashboard (team_id=2)
+boston_data = pwhl_team_dashboard(2)
 ```
 
 ---
 
-# AHL - American Hockey League
+## AHL API
 
-Complete API access for the American Hockey League.
+American Hockey League API.
 
-## AHL Overview
-
+### Configuration
 - **API Key**: `ccb91f29d6744675`
 - **Site ID**: `3`
 - **Teams**: 24+ teams
 - **Base URL**: `https://lscluster.hockeytech.com/feed/index.php`
 
-## AHL Quick Start
+### Quick Start
 
 ```python
 from scrapernhl.ahl import api
 
-# Get teams
+# Get all AHL teams
 teams = api.get_teams()
 
-# Get leaders
+# Get league leaders
 stats = api.get_skater_stats(limit=50)
 
-# Get standings
+# Get standings by division
 standings = api.get_standings(group_by='division')
 ```
 
-## AHL Available Functions
-
-All 15 functions work identically to PWHL (see PWHL section above).
-
-## AHL Examples
+### Example: Player Search
 
 ```python
 from scrapernhl.ahl import api
 
-# Find rookies
-rookies = api.get_skater_stats(rookies=1, limit=20)
+def find_ahl_rookies(limit=20):
+    """Get top rookie players."""
+    stats = api.get_skater_stats(
+        rookies=1,
+        limit=limit
+    )
+    players = stats.get('players', [])
+    
+    for player in players:
+        print(f"{player['name']}: {player.get('points', 0)} pts")
+    
+    return players
 
-# Team comparison
-team1 = api.get_skater_stats(team='5', limit=100)
-team2 = api.get_skater_stats(team='8', limit=100)
+rookies = find_ahl_rookies(limit=20)
 ```
 
 ---
 
-# OHL - Ontario Hockey League
+## OHL API
 
-Complete API access for the Ontario Hockey League.
+Ontario Hockey League API.
 
-## OHL Overview
-
+### Configuration
 - **API Key**: `f1aa699db3d81487`
 - **Teams**: 20+ teams
 - **Base URL**: `https://lscluster.hockeytech.com/feed/index.php`
 
-## OHL Quick Start
+### Quick Start
 
 ```python
 from scrapernhl.ohl import api
 
-# Get teams
+# Get all OHL teams
 teams = api.get_teams()
 
-# Get leaders
+# Get scoring leaders
 leaders = api.get_skater_stats(limit=10)
 
-# Get schedule
+# Get team schedule
 schedule = api.get_team_schedule(team_id=5)
 ```
 
-## OHL Available Functions
-
-All 15 functions work identically to PWHL (see PWHL section above).
-
-## OHL Examples
+### Example: Game Analysis
 
 ```python
 from scrapernhl.ohl import api
 
-# Game analysis
-game = api.get_game_full_data(game_id=12345)
-pbp = game.get('play_by_play', {})
-print(f"Events: {len(pbp.get('plays', []))}")
+def analyze_ohl_game(game_id):
+    """Get complete game analysis."""
+    game_data = api.get_game_full_data(game_id)
+    
+    return {
+        'preview': game_data.get('preview'),
+        'summary': game_data.get('summary'),
+        'pbp': game_data.get('play_by_play')
+    }
+
+game = analyze_ohl_game(12345)
 ```
 
 ---
 
-# WHL - Western Hockey League
+## WHL API
 
-Complete API access for the Western Hockey League.
+Western Hockey League API.
 
-## WHL Overview
-
+### Configuration
 - **API Key**: `f1aa699db3d81487` (shared with OHL)
 - **Teams**: 22+ teams
 - **Base URL**: `https://lscluster.hockeytech.com/feed/index.php`
 
-## WHL Quick Start
+### Quick Start
 
 ```python
 from scrapernhl.whl import api
 
-# Get teams
+# Get all WHL teams
 teams = api.get_teams()
 
-# Get goalies
-goalies = api.get_goalie_stats(qualified='qualified', limit=20)
+# Get goalie stats
+goalies = api.get_goalie_stats(
+    qualified='qualified',
+    limit=20
+)
 
 # Get standings
 standings = api.get_standings(context='overall')
 ```
 
-## WHL Available Functions
-
-All 15 functions work identically to PWHL (see PWHL section above).
-
-## WHL Examples
+### Example: Team Comparison
 
 ```python
 from scrapernhl.whl import api
 
-# Top goalies by save percentage
-goalies = api.get_goalie_stats(qualified='qualified', limit=50)
-goalie_list = goalies.get('players', [])
-sorted_goalies = sorted(goalie_list, key=lambda g: g.get('save_pct', 0), reverse=True)[:10]
+def compare_whl_teams(team_id_1, team_id_2):
+    """Compare two WHL teams."""
+    team1_stats = api.get_skater_stats(team=str(team_id_1), limit=100)
+    team2_stats = api.get_skater_stats(team=str(team_id_2), limit=100)
+    
+    return {
+        'team1': team1_stats,
+        'team2': team2_stats
+    }
+
+comparison = compare_whl_teams(5, 8)
 ```
 
 ---
 
-# QMJHL - Quebec Maritimes Junior Hockey League
+## QMJHL API
 
-Complete API access for the Quebec Maritimes Junior Hockey League.
+Quebec Maritimes Junior Hockey League API.
 
-## QMJHL Overview
-
+### Configuration
 - **API Key**: `f322673b6bcae299`
 - **Teams**: 18+ teams
 - **Base URL**: `https://lscluster.hockeytech.com/feed/index.php`
 
-## QMJHL Quick Start
+### Quick Start
 
 ```python
 from scrapernhl.qmjhl import api
 
-# Get teams
+# Get all QMJHL teams
 teams = api.get_teams()
 
-# Get stats with pagination
+# Get player stats with pagination
 page1 = api.get_skater_stats(first=0, limit=50)
 page2 = api.get_skater_stats(first=50, limit=50)
 
-# Get roster
+# Get team roster
 roster = api.get_roster(team_id=3)
 ```
 
-## QMJHL Available Functions
-
-All 15 functions work identically to PWHL (see PWHL section above).
-
-## QMJHL Examples
+### Example: League Leaders
 
 ```python
 from scrapernhl.qmjhl import api
 
-# Scoring leaders
-stats = api.get_skater_stats(limit=10)
-for i, player in enumerate(stats.get('players', []), 1):
-    print(f"{i}. {player['name']}: {player.get('points', 0)}P")
-
-# Paginate all players
-all_players = []
-page = 0
-while True:
-    stats = api.get_skater_stats(first=page * 100, limit=100)
+def qmjhl_scoring_leaders(top_n=10):
+    """Get top scorers in QMJHL."""
+    stats = api.get_skater_stats(limit=top_n)
     players = stats.get('players', [])
-    if not players:
-        break
-    all_players.extend(players)
-    page += 1
+    
+    leaders = []
+    for i, player in enumerate(players, 1):
+        leaders.append({
+            'rank': i,
+            'name': player.get('name'),
+            'team': player.get('team'),
+            'goals': player.get('goals', 0),
+            'assists': player.get('assists', 0),
+            'points': player.get('points', 0)
+        })
+    
+    return leaders
+
+leaders = qmjhl_scoring_leaders(top_n=10)
+for leader in leaders:
+    print(f"{leader['rank']}. {leader['name']}: {leader['points']}P")
 ```
 
 ---
 
-# Multi-League Comparison
+## Multi-League Common Parameters
 
-## Cross-League Analysis
+### Player Stats Functions
 
-Compare data across all 5 leagues using the same API:
+Both `get_skater_stats()` and `get_goalie_stats()` support:
 
-```python
-from scrapernhl.pwhl import api as pwhl
-from scrapernhl.ahl import api as ahl
-from scrapernhl.ohl import api as ohl
-from scrapernhl.whl import api as whl
-from scrapernhl.qmjhl import api as qmjql
-
-leagues = [
-    ('PWHL', pwhl),
-    ('AHL', ahl),
-    ('OHL', ohl),
-    ('WHL', whl),
-    ('QMJHL', qmjql)
-]
-
-# Compare team counts
-for name, module in leagues:
-    teams = module.get_teams()
-    print(f"{name}: {len(teams.get('teams', []))} teams")
-
-# Compare top scorers
-for name, module in leagues:
-    stats = module.get_skater_stats(limit=1)
-    players = stats.get('players', [])
-    if players:
-        print(f"{name}: {players[0]['name']} - {players[0].get('points', 0)}P")
-```
-
-## Common Parameters
-
-All 5 leagues support identical parameters:
-
-**Player Stats:**
 ```python
 api.get_skater_stats(
     limit=50,           # Max results
-    first=0,            # Starting offset
-    team='5',           # Filter by team
-    rookies=1,          # Rookies only
-    qualified='qualified'  # Qualified only
+    first=0,            # Starting offset (pagination)
+    team='5',           # Filter by team ID
+    rookies=1,          # Rookies only (0 or 1)
+    stats_type='standard',  # Stats type
+    qualified='qualified',  # Qualified players only
+    division='2',       # Filter by division
+    conference='1'      # Filter by conference
 )
 ```
 
-**Schedule:**
+### Schedule Functions
+
 ```python
 api.get_schedule(
-    team_id=-1,         # -1 for all teams
-    month=-1,           # -1 for all months
-    location='home'     # 'home', 'away', or None
+    team_id=-1,         # -1 for all teams, or specific team ID
+    month=-1,           # -1 for all months, 1-12 for specific
+    location='home'     # 'home', 'away', or None for all
 )
 ```
 
-**Standings:**
+### Standings Functions
+
 ```python
 api.get_standings(
     group_by='division',  # 'division', 'conference', 'league'
@@ -914,16 +965,21 @@ api.get_standings(
 )
 ```
 
+---
+
 ## Multi-League Resources
 
-- **[Quick Reference](api-quick-reference.md)** - Fast function lookup
-- **[Complete Examples](multi-league-api-examples.md)** - Comprehensive guide
+For detailed examples and patterns:
+
+- **[Quick Reference Guide](api-quick-reference.md)** - Fast lookup for all functions
+- **[Complete Examples](multi-league-api-examples.md)** - Comprehensive usage guide
 - **[Interactive Notebook](../notebooks/multi_league_api_examples.ipynb)** - Jupyter examples
-- **[Test Suite](../test_multi_league_api.py)** - Reference implementations
+- **[Test Suite](../test_multi_league_api.py)** - Working examples for all leagues
 
 ---
 
-For more information:
-- [Getting Started](getting-started.md)
+For more information, see:
+- [Getting Started Guide](getting-started.md)
 - [NHL Examples](examples/scraping.md)
 - [Multi-League Examples](multi-league-api-examples.md)
+- [Modularization Guide](../MODULARIZATION.md)

@@ -19,10 +19,13 @@ Python package for scraping and analyzing NHL data with built-in Expected Goals 
 - **Expected Goals (xG)**: Built-in xG model
 - **Advanced Analytics**: Corsi, Fenwick, scoring chances, TOI, zone starts
 
-### Multi-League Ready
-- **NHL**: Full support (teams, games, players, analytics)
-- **Future Leagues**: Architecture supports OHL, WHL, QMJHL, PWHL
-- **Shared Infrastructure**: Caching, progress tracking, batch processing
+### Multi-League Support
+- **PWHL, AHL, OHL, WHL, QMJHL**: Comprehensive API modules for 5 HockeyTech leagues
+- **15+ Endpoints**: Teams, schedules, stats, rosters, games, standings
+- **Unified Interface**: Same API structure across all leagues
+- **Play-by-Play Scrapers**: Enhanced cleaning with shot+goal merging ("nhlify")
+- **Rate Limited**: Automatic 2 req/sec enforcement
+- **See**: `MULTI_LEAGUE_API_FRAMEWORK.md` and `notebooks/multi_league_api_examples.ipynb`
 
 ### Access Methods
 - **Python API**: pandas/polars support
@@ -99,6 +102,30 @@ pbp = game_data.data
 corsi = calculate_corsi(pbp)
 chances = identify_scoring_chances(pbp)
 report = create_analytics_report(pbp, game_data.rosters)
+```
+
+### Multi-League APIs (PWHL, AHL, OHL, WHL, QMJHL)
+
+```python
+# PWHL Example
+from scrapernhl.pwhl import api
+
+# Get current games
+scorebar = api.get_scorebar(days_ahead=7)
+
+# Get player stats with pagination
+skaters = api.get_skater_stats(team='5', limit=50, rookies=1)
+
+# Get standings by division
+standings = api.get_standings(group_by='division')
+
+# All leagues have the same API - just change the import!
+from scrapernhl.ahl import api as ahl
+from scrapernhl.ohl import api as ohl
+from scrapernhl.whl import api as whl
+from scrapernhl.qmjhl import api as qmjql
+
+# See notebooks/multi_league_api_examples.ipynb for 15+ examples
 ```
 
 ### Command-Line Interface

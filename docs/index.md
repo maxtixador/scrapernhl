@@ -46,6 +46,12 @@ rosters = game_data.rosters
 - Player profiles, season stats, game logs
 - Draft data and historical records
 
+### Multi-League Support
+- **5 Leagues**: PWHL, AHL, OHL, WHL, QMJHL
+- Unified API across all leagues
+- 15+ functions per league (75 total endpoints)
+- See [Multi-League API Examples](multi-league-api-examples.md) and [Quick Reference](api-quick-reference.md)
+
 ### Analytics
 - Pre-trained XGBoost Expected Goals (xG) model
 - Corsi and Fenwick calculations
@@ -71,11 +77,22 @@ rosters = game_data.rosters
 
 ## Quick Links
 
-- [Getting Started](getting-started.md)
-- [API Reference](api.md)
+### Getting Started
+- [Getting Started](getting-started.md) - Installation and setup
+- [API Reference](api.md) - Complete NHL API documentation
+
+### Multi-League APIs (NEW!)
+- [🚀 Quick Reference](api-quick-reference.md) - Fast lookup for all 15 functions
+- [📚 Complete Examples](multi-league-api-examples.md) - Comprehensive guide with patterns
+- [📓 Interactive Notebook](../notebooks/multi_league_api_examples.ipynb) - Jupyter examples
+- [🧪 Test Suite](../test_multi_league_api.py) - Reference implementations
+
+### Examples
 - [CLI Examples](examples/cli.md) - Command-line usage
 - [Python Examples](examples/scraping.md) - Python API usage
 - [Advanced Analytics](examples/advanced.md) - Analytics features
+
+### About
 - [About the Project](about.md)
 - [GitHub Repository](https://github.com/maxtixador/scrapernhl)
 - [PyPI Package](https://pypi.org/project/scrapernhl/)

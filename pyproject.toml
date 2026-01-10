@@ -44,10 +44,13 @@ dependencies = [
     "jupyterlab>=4.0.0",
     "numpy>=2.0.0",
     "pandas>=2.0.0",
+    "playwright>=1.57.0",
     "polars>=0.20.0",
     "requests>=2.31.0",
     "rich>=13.0.0",
+    "seaborn>=0.13.2",
     "selectolax>=0.3.27",
+    "tqdm>=4.67.1",
     "urllib3>=2.0.0",
     "xgboost>=2.0.0",
 ]
