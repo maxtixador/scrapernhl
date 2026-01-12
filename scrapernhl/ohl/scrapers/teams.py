@@ -9,20 +9,31 @@ import polars as pl
 from ...core.utils import json_normalize
 from ...core.progress import console
 from ...core.cache import cached
-from ..api import fetch_api, OHLConfig
+from ..api import get_bootstrap, OHLConfig
 
 
-@cached(ttl=86400, cache_key_func=lambda season=None, **kwargs: f"ohl_teams_{season}")
+@cached(ttl=86400, cache_key_func=lambda season=None, **kwargs: f"ohl_teams_{season if season is not None else OHLConfig.DEFAULT_SEASON}")
 def getTeamsData(season: Union[int, str] = None) -> List[Dict]:
-    """Scrapes raw OHL teams data."""
+    """Scrapes raw OHL teams data from bootstrap."""
     if season is None:
         season = OHLConfig.DEFAULT_SEASON
-    
+
     console.print_info(f"Fetching OHL teams (season={season})...")
-    
+
     try:
-        response = fetch_api(feed='statviewfeed', view='teamsForSeason', season=season)
-        teams = response if isinstance(response, list) else []
+        # Use bootstrap data which contains correct teams list
+        bootstrap = get_bootstrap()
+        # Use teamsNoAll to exclude 'All Teams' entry, fall back to teams
+        if isinstance(bootstrap, dict):
+            if 'teamsNoAll' in bootstrap and len(bootstrap['teamsNoAll']) > 0:
+                teams = bootstrap['teamsNoAll']
+            elif 'teams' in bootstrap:
+                # Filter out 'All Teams' entry (id=-1)
+                teams = [t for t in bootstrap['teams'] if t.get('id') != -1 and t.get('id') != '-1']
+            else:
+                teams = []
+        else:
+            teams = []
     except Exception as e:
         raise RuntimeError(f"Error fetching teams data: {e}")
 

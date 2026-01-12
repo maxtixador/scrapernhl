@@ -1,0 +1,120 @@
+"""
+QMJHL Additional Wrapper Functions
+
+Additional wrapper functions for QMJHL data that provide convenience aliases
+and additional functionality beyond the base scrapers.
+"""
+
+from typing import Union, Optional
+import pandas as pd
+from scrapernhl.qmjhl.api import (
+    get_scorebar, get_play_by_play, get_game_summary, QMJHLConfig, fetch_api
+)
+from datetime import datetime
+
+
+def scrapeScorebar(
+    days_ahead: int = 6,
+    days_back: int = 0,
+    season_id: Optional[int] = None,
+    config: QMJHLConfig = None
+) -> pd.DataFrame:
+    """
+    Scrape QMJHL live games and recent results as a DataFrame.
+    
+    Args:
+        days_ahead: Number of days ahead to fetch
+        days_back: Number of days back to fetch
+        season_id: Season ID (uses default if None)
+        config: QMJHLConfig instance
+        
+    Returns:
+        DataFrame with scorebar games
+    """
+    data = get_scorebar(days_ahead=days_ahead, days_back=days_back, season_id=season_id, config=config)
+    # QMJHL scorebar returns data directly in 'Scorebar' key (no SiteKit wrapper)
+    games = data.get('Scorebar', []) if isinstance(data, dict) else []
+    return pd.DataFrame(games)
+
+
+def scrapeSkaterStats(
+    season: Union[int, str] = None,
+    sort: str = 'points',
+    team: str = 'all',
+    limit: int = 500,
+    config: QMJHLConfig = None
+) -> pd.DataFrame:
+    """
+    Scrape QMJHL skater statistics as a DataFrame.
+    
+    This is a convenience wrapper around the base scrapePlayerStats function.
+    
+    Args:
+        season: Season ID (uses default if None)
+        sort: Sort field ('points', 'goals', 'assists', etc.)
+        team: Team filter ('all' or team ID)
+        limit: Number of results to return
+        config: QMJHLConfig instance
+        
+    Returns:
+        DataFrame with skater stats
+    """
+    # Import here to avoid circular imports
+    from .teams_stats_roster import scrapePlayerStats
+    return scrapePlayerStats(season=season, player_type='skater', sort=sort, limit=limit)
+
+
+def scrapeGoalieStats(
+    season: Union[int, str] = None,
+    sort: str = 'gaa',
+    team: str = 'all',
+    limit: int = 200,
+    config: QMJHLConfig = None
+) -> pd.DataFrame:
+    """
+    Scrape QMJHL goalie statistics as a DataFrame.
+    
+    This is a convenience wrapper around the base scrapePlayerStats function.
+    
+    Args:
+        season: Season ID (uses default if None)
+        sort: Sort field ('gaa', 'savePct', 'wins', etc.)
+        team: Team filter ('all' or team ID)
+        limit: Number of results to return
+        config: QMJHLConfig instance
+        
+    Returns:
+        DataFrame with goalie stats
+    """
+    # Import here to avoid circular imports
+    from .teams_stats_roster import scrapePlayerStats
+    return scrapePlayerStats(season=season, player_type='goalie', sort=sort, limit=limit)
+
+
+def scrapePlayByPlay(game_id: int, config: QMJHLConfig = None) -> pd.DataFrame:
+    """
+    Scrape QMJHL play-by-play events as a DataFrame.
+    
+    Args:
+        game_id: Game ID
+        config: QMJHLConfig instance
+        
+    Returns:
+        DataFrame with play-by-play events
+    """
+    pbp_data = get_play_by_play(game_id=game_id, config=config)
+    return pd.DataFrame(pbp_data)
+
+
+def scrapeGameSummary(game_id: int, config: QMJHLConfig = None) -> dict:
+    """
+    Scrape QMJHL game summary.
+    
+    Args:
+        game_id: Game ID
+        config: QMJHLConfig instance
+        
+    Returns:
+        Dictionary with game summary data (contains multiple DataFrames)
+    """
+    return get_game_summary(game_id=game_id, config=config)

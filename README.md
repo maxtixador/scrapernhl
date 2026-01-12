@@ -49,6 +49,8 @@ Python package for scraping and analyzing NHL data with built-in Expected Goals 
 pip install scrapernhl
 ```
 
+> **Note:** Version 0.1.5 includes critical bug fixes for multi-league team scrapers and goalie statistics. See [CHANGELOG.md](CHANGELOG.md) for details.
+
 ### From GitHub (Latest)
 
 Install the development version with the latest features and fixes:
@@ -231,4 +233,4 @@ Built for the hockey analytics community.
 
 ---
 
-**Last Updated:** January 2026 | **Version:** 0.1.4
+**Last Updated:** January 11, 2026 | **Version:** 0.1.5 (dev)

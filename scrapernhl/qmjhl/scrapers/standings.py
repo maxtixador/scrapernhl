@@ -9,7 +9,6 @@ import polars as pl
 from ...core.utils import json_normalize
 from ...core.progress import console
 from ...core.cache import cached
-from ...exceptions import APIError
 from ..api import fetch_api, QMJHLConfig
 
 
@@ -34,9 +33,9 @@ def getStandingsData(
     """
     if season is None:
         season = QMJHLConfig.DEFAULT_SEASON
-    
+
     console.print_info(f"Fetching QMJHL standings (season={season}, context={context})...")
-    
+
     try:
         response = fetch_api(
             feed='statviewfeed',

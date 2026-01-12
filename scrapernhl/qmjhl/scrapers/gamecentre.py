@@ -12,7 +12,7 @@ Date: 2026-01-07
 """
 
 import requests
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any
 
 
 # API configuration
@@ -25,7 +25,7 @@ DEFAULT_LANG = "en"
 def scrape_gamecentre(game_id: int, lang: str = DEFAULT_LANG) -> Dict[str, Any]:
     """
     Scrape comprehensive game data from the QMJHL game centre API.
-    
+
     This function fetches the complete game summary including:
     - Game information (date, venue, status, officials)
     - Home and visiting team info
@@ -34,11 +34,11 @@ def scrape_gamecentre(game_id: int, lang: str = DEFAULT_LANG) -> Dict[str, Any]:
     - Goaltender stats
     - Penalties
     - Team stats by period
-    
+
     Args:
         game_id: The unique game identifier
         lang: Language code ('en' or 'fr'), defaults to 'en'
-    
+
     Returns:
         Dictionary containing all game centre data with keys:
         - game_info: Basic game information
@@ -47,7 +47,7 @@ def scrape_gamecentre(game_id: int, lang: str = DEFAULT_LANG) -> Dict[str, Any]:
         - goals: List of goals with on-ice players
         - penalties: List of all penalties
         - stats: Game statistics
-    
+
     Example:
         >>> data = scrape_gamecentre(game_id=32236)
         >>> print(f"Game: {data['visiting_team']['info']['name']} @ {data['home_team']['info']['name']}")
@@ -56,21 +56,21 @@ def scrape_gamecentre(game_id: int, lang: str = DEFAULT_LANG) -> Dict[str, Any]:
     """
     # Fetch the game summary data
     url = f"{API_BASE_URL}?feed=gc&key={API_KEY}&game_id={game_id}&client_code={CLIENT_CODE}&tab=gamesummary&lang_code={lang}&fmt=json"
-    
+
     headers = {
         'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36'
     }
-    
+
     response = requests.get(url, headers=headers, timeout=30)
     response.raise_for_status()
-    
+
     data = response.json()
-    
+
     if 'GC' not in data or 'Gamesummary' not in data['GC']:
         raise ValueError(f"Invalid API response for game_id {game_id}")
-    
+
     gamesummary = data['GC']['Gamesummary']
-    
+
     # Extract and structure the data
     return {
         'game_info': _extract_game_info(gamesummary),
@@ -85,37 +85,37 @@ def scrape_gamecentre(game_id: int, lang: str = DEFAULT_LANG) -> Dict[str, Any]:
 def get_rosters(game_id: int, lang: str = DEFAULT_LANG) -> Dict[str, List[Dict[str, Any]]]:
     """
     Get just the rosters for a game (faster than full game centre scrape).
-    
+
     Returns rosters with player IDs, names, positions, and jersey numbers.
     Useful when you only need roster information without full game stats.
-    
+
     Args:
         game_id: The unique game identifier
         lang: Language code ('en' or 'fr'), defaults to 'en'
-    
+
     Returns:
         Dictionary with keys 'home' and 'visiting', each containing:
         - team_info: Basic team information
         - players: List of skaters with IDs and positions
         - goalies: List of goaltenders with IDs
-    
+
     Example:
         >>> rosters = get_rosters(game_id=32236)
         >>> for player in rosters['home']['players']:
         ...     print(f"#{player['jersey_number']} {player['first_name']} {player['last_name']} ({player['player_id']})")
     """
     url = f"{API_BASE_URL}?feed=gc&key={API_KEY}&game_id={game_id}&client_code={CLIENT_CODE}&tab=gamesummary&lang_code={lang}&fmt=json"
-    
+
     headers = {
         'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36'
     }
-    
+
     response = requests.get(url, headers=headers, timeout=30)
     response.raise_for_status()
-    
+
     data = response.json()
     gamesummary = data['GC']['Gamesummary']
-    
+
     return {
         'home': _extract_roster(gamesummary, 'home'),
         'visiting': _extract_roster(gamesummary, 'visitor'),
@@ -144,17 +144,17 @@ def _extract_game_info(gamesummary: Dict[str, Any]) -> Dict[str, Any]:
 def _extract_team_data(gamesummary: Dict[str, Any], team_type: str) -> Dict[str, Any]:
     """
     Extract complete team data including info, roster, and stats.
-    
+
     Args:
         gamesummary: The game summary data
         team_type: 'home' or 'visitor'
     """
     team_key = team_type
     lineup_key = f'{team_type}_team_lineup'
-    
+
     team_info = gamesummary.get(team_key, {})
     lineup = gamesummary.get(lineup_key, {})
-    
+
     return {
         'info': {
             'team_id': team_info.get('team_id'),
@@ -175,15 +175,15 @@ def _extract_team_data(gamesummary: Dict[str, Any], team_type: str) -> Dict[str,
 def _extract_roster(gamesummary: Dict[str, Any], team_type: str) -> Dict[str, Any]:
     """
     Extract roster with minimal data (for get_rosters function).
-    
+
     Returns player IDs, names, positions, and jersey numbers only.
     """
     team_key = team_type
     lineup_key = f'{team_type}_team_lineup'
-    
+
     team_info = gamesummary.get(team_key, {})
     lineup = gamesummary.get(lineup_key, {})
-    
+
     # Extract only essential player data
     players = []
     for player in lineup.get('players', []):
@@ -197,7 +197,7 @@ def _extract_roster(gamesummary: Dict[str, Any], team_type: str) -> Dict[str, An
             'status': player.get('status', ''),  # C, A, or empty
             'rookie': player.get('rookie') == '1',
         })
-    
+
     goalies = []
     for goalie in lineup.get('goalies', []):
         goalies.append({
@@ -209,7 +209,7 @@ def _extract_roster(gamesummary: Dict[str, Any], team_type: str) -> Dict[str, An
             'position': 'G',
             'rookie': goalie.get('rookie') == '1',
         })
-    
+
     return {
         'team_info': {
             'team_id': team_info.get('team_id'),
@@ -225,7 +225,7 @@ def _extract_roster(gamesummary: Dict[str, Any], team_type: str) -> Dict[str, An
 def _extract_goals(gamesummary: Dict[str, Any]) -> List[Dict[str, Any]]:
     """
     Extract all goals with scorer, assists, and on-ice players (+/-).
-    
+
     Each goal includes:
     - Period, time, location
     - Scorer and assists (with player_id)
@@ -233,7 +233,7 @@ def _extract_goals(gamesummary: Dict[str, Any]) -> List[Dict[str, Any]]:
     - Goal type (PP, SH, EN, etc.)
     """
     goals = gamesummary.get('goals', [])
-    
+
     formatted_goals = []
     for goal in goals:
         formatted_goals.append({
@@ -258,14 +258,14 @@ def _extract_goals(gamesummary: Dict[str, Any]) -> List[Dict[str, Any]]:
             'on_ice_plus': goal.get('plus', []),  # Scoring team
             'on_ice_minus': goal.get('minus', []),  # Defending team
         })
-    
+
     return formatted_goals
 
 
 def _extract_penalties(gamesummary: Dict[str, Any]) -> List[Dict[str, Any]]:
     """Extract all penalties with player info and penalty details."""
     penalties = gamesummary.get('penalties', [])
-    
+
     formatted_penalties = []
     for penalty in penalties:
         formatted_penalties.append({
@@ -285,7 +285,7 @@ def _extract_penalties(gamesummary: Dict[str, Any]) -> List[Dict[str, Any]]:
                 'penalty_class': penalty.get('penalty_class'),
             },
         })
-    
+
     return formatted_penalties
 
 
@@ -317,52 +317,52 @@ def _extract_stats(gamesummary: Dict[str, Any]) -> Dict[str, Any]:
 def get_player_ids(game_id: int, team: str = 'both', lang: str = DEFAULT_LANG) -> List[str]:
     """
     Get list of player IDs for a specific team or both teams.
-    
+
     Args:
         game_id: The unique game identifier
         team: 'home', 'visiting', or 'both' (default)
         lang: Language code
-    
+
     Returns:
         List of player_id strings
-    
+
     Example:
         >>> player_ids = get_player_ids(game_id=32236, team='home')
         >>> print(f"Found {len(player_ids)} players")
     """
     rosters = get_rosters(game_id, lang)
-    
+
     player_ids = []
-    
+
     if team in ('home', 'both'):
         for player in rosters['home']['players']:
             player_ids.append(player['player_id'])
         for goalie in rosters['home']['goalies']:
             player_ids.append(goalie['player_id'])
-    
+
     if team in ('visiting', 'both'):
         for player in rosters['visiting']['players']:
             player_ids.append(player['player_id'])
         for goalie in rosters['visiting']['goalies']:
             player_ids.append(goalie['player_id'])
-    
+
     return player_ids
 
 
 def get_goals_with_onice(game_id: int, lang: str = DEFAULT_LANG) -> List[Dict[str, Any]]:
     """
     Get goals with on-ice player information.
-    
+
     This is a convenience function that returns just the goals data
     without fetching the full game centre information.
-    
+
     Args:
         game_id: The unique game identifier
         lang: Language code
-    
+
     Returns:
         List of goals with on-ice players (+/-)
-    
+
     Example:
         >>> goals = get_goals_with_onice(game_id=32236)
         >>> for goal in goals:

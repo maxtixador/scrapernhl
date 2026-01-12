@@ -7,6 +7,8 @@ Provides access to games, schedules, teams, rosters, player stats, and more.
 The AHL uses the same LeagueStat platform as PWHL, so the API structure is identical.
 """
 
+from __future__ import annotations
+
 import time
 import json
 import logging
@@ -23,23 +25,23 @@ logger = logging.getLogger(__name__)
 
 class AHLConfig:
     """Configuration for AHL API access."""
-    
+
     # API credentials
     API_KEY = "ccb91f29d6744675"
     CLIENT_CODE = "ahl"
     LEAGUE_ID = "4"
     SITE_ID = "3"
-    
+
     # Defaults
     DEFAULT_SEASON = "90"  # Current AHL season
-    
+
     # Rate limiting
     RATE_LIMIT_CALLS = 2  # calls per period
     RATE_LIMIT_PERIOD = 1.0  # period in seconds
-    
+
     # API base URL
     BASE_URL = "https://lscluster.hockeytech.com/feed/index.php"
-    
+
     def __init__(
         self,
         api_key: str = None,
@@ -49,7 +51,7 @@ class AHLConfig:
     ):
         """
         Initialize AHL config with custom values.
-        
+
         Args:
             api_key: Override default API key
             client_code: Override default client code
@@ -68,30 +70,30 @@ class AHLConfig:
 
 class RateLimiter:
     """Simple rate limiter using sliding window."""
-    
+
     def __init__(self, calls: int, period: float):
         self.calls = calls
         self.period = period
         self.timestamps: List[float] = []
-    
+
     def __call__(self, func):
         @wraps(func)
         def wrapper(*args, **kwargs):
             now = time.time()
-            
+
             # Remove timestamps outside the window
             self.timestamps = [ts for ts in self.timestamps if now - ts < self.period]
-            
+
             # Wait if we've hit the limit
             if len(self.timestamps) >= self.calls:
                 sleep_time = self.period - (now - self.timestamps[0])
                 if sleep_time > 0:
                     logger.debug(f"Rate limit reached, sleeping {sleep_time:.2f}s")
                     time.sleep(sleep_time)
-            
+
             # Record this call
             self.timestamps.append(time.time())
-            
+
             return func(*args, **kwargs)
         return wrapper
 
@@ -103,20 +105,20 @@ class RateLimiter:
 def clean_jsonp(text: str) -> str:
     """
     Remove JSONP wrapper from response.
-    
+
     HockeyTech API returns responses wrapped in:
     - angular.callbacks._X(...)
     - or just (...)
     This function strips those wrappers to get clean JSON.
-    
+
     Args:
         text: Raw response text
-    
+
     Returns:
         Clean JSON string
     """
     text = text.strip()
-    
+
     # Check for angular.callbacks wrapper
     if text.startswith('angular.callbacks.'):
         # Find the opening parenthesis
@@ -131,7 +133,7 @@ def clean_jsonp(text: str) -> str:
     # Check for plain parentheses wrapper (AHL format)
     elif text.startswith('(') and text.endswith(')'):
         text = text[1:-1]
-    
+
     return text
 
 
@@ -144,23 +146,23 @@ def fetch_api(
 ) -> Dict[str, Any]:
     """
     Generic API fetch function with rate limiting.
-    
+
     Args:
         feed: Feed type ('statviewfeed', 'modulekit', etc.)
         view: View type ('gameCenterPlayByPlay', 'scorebar', etc.)
         config: AHLConfig instance (uses defaults if None)
         **params: Additional query parameters
-    
+
     Returns:
         Parsed JSON response
-    
+
     Raises:
         requests.RequestException: On HTTP errors
         json.JSONDecodeError: On JSON parsing errors
     """
     if config is None:
         config = AHLConfig()
-    
+
     # Build query parameters
     query_params = {
         'feed': feed,
@@ -170,25 +172,25 @@ def fetch_api(
         'league_id': config.LEAGUE_ID,
         **params
     }
-    
+
     logger.debug(f"Fetching {view} with params: {query_params}")
-    
+
     try:
         response = requests.get(config.BASE_URL, params=query_params, timeout=30)
         response.raise_for_status()
-        
+
         # Clean JSONP wrapper
         clean_text = clean_jsonp(response.text)
-        
+
         # Parse JSON
         data = json.loads(clean_text)
-        
+
         # Handle nested SiteKit structure
         if isinstance(data, dict) and 'SiteKit' in data:
             return data['SiteKit']
-        
+
         return data
-        
+
     except requests.RequestException as e:
         logger.error(f"HTTP error fetching {view}: {e}")
         raise
@@ -213,7 +215,7 @@ def get_scorebar(
 ) -> Dict[str, Any]:
     """
     Get live games and upcoming schedule (scorebar).
-    
+
     Args:
         days_ahead: Number of days ahead to fetch (default: 6)
         days_back: Number of days back to fetch (default: 0)
@@ -222,16 +224,16 @@ def get_scorebar(
         division_id: Division ID filter (-1 for all)
         season_id: Explicit season id (defaults to current season)
         config: AHLConfig instance
-    
+
     Returns:
         Scorebar data with games
-    
+
     Example:
         >>> scorebar = get_scorebar(days_ahead=7, days_back=2)
         >>> print(f"Found {len(scorebar['games'])} games")
     """
     from datetime import datetime, timedelta
-    
+
     # Calculate date range (API requires explicit dates, not relative days)
     today = datetime.now()
     date_from = (today - timedelta(days=days_back)).strftime('%Y-%m-%d')
@@ -252,7 +254,7 @@ def get_scorebar(
 
     if season is None:
         season = config.DEFAULT_SEASON if config else AHLConfig.DEFAULT_SEASON
-    
+
     params = {
         'date_from': date_from,
         'date_to': date_to,
@@ -281,24 +283,24 @@ def get_schedule(
 ) -> Dict[str, Any]:
     """
     Get full season schedule.
-    
+
     Args:
         team_id: Team ID (use -1 for all teams)
         season: Season ID (uses default if None)
         month: Month filter (-1 for all months, 1-12 for specific month)
         location: Game location filter ('homeaway', 'home', 'away')
         config: AHLConfig instance
-    
+
     Returns:
         Schedule data
-    
+
     Example:
         >>> schedule = get_schedule()  # All teams
         >>> schedule = get_schedule(team_id=2, location='home')  # Home games only
     """
     if season is None:
         season = AHLConfig.DEFAULT_SEASON if config is None else config.DEFAULT_SEASON
-    
+
     return fetch_api(
         feed='statviewfeed',
         view='schedule',
@@ -316,14 +318,14 @@ def get_schedule(
 def get_game_preview(game_id: int, config: AHLConfig = None) -> Dict[str, Any]:
     """
     Get game preview/summary information.
-    
+
     Args:
         game_id: Game ID
         config: AHLConfig instance
-    
+
     Returns:
         Game preview data
-    
+
     Example:
         >>> preview = get_game_preview(12345)
         >>> print(preview['home_team'], 'vs', preview['away_team'])
@@ -339,14 +341,14 @@ def get_game_preview(game_id: int, config: AHLConfig = None) -> Dict[str, Any]:
 def get_game_summary(game_id: int, config: AHLConfig = None) -> Dict[str, Any]:
     """
     Get detailed game summary with stats.
-    
+
     Args:
         game_id: Game ID
         config: AHLConfig instance
-    
+
     Returns:
         Game summary with team stats, scoring, penalties, etc.
-    
+
     Example:
         >>> summary = get_game_summary(12345)
         >>> print(summary['final_score'])
@@ -362,14 +364,14 @@ def get_game_summary(game_id: int, config: AHLConfig = None) -> Dict[str, Any]:
 def get_play_by_play(game_id: int, config: AHLConfig = None) -> List[Dict[str, Any]]:
     """
     Get play-by-play events for a game.
-    
+
     Args:
         game_id: Game ID
         config: AHLConfig instance
-    
+
     Returns:
         List of play-by-play events
-    
+
     Example:
         >>> pbp = get_play_by_play(12345)
         >>> print(f"Found {len(pbp)} events")
@@ -380,7 +382,7 @@ def get_play_by_play(game_id: int, config: AHLConfig = None) -> List[Dict[str, A
         game_id=game_id,
         config=config
     )
-    
+
     # Extract events array if wrapped
     if isinstance(data, list):
         return data
@@ -396,17 +398,17 @@ def get_play_by_play(game_id: int, config: AHLConfig = None) -> List[Dict[str, A
 def get_teams(season: Union[int, str] = None, config: AHLConfig = None) -> Dict[str, Any]:
     """
     Get all teams for a season.
-    
+
     Args:
         season: Season ID (uses default if None)
         config: AHLConfig instance
-    
+
     Returns:
         Teams data
     """
     if season is None:
         season = AHLConfig.DEFAULT_SEASON if config is None else config.DEFAULT_SEASON
-    
+
     return fetch_api(
         feed='statviewfeed',
         view='teamsForSeason',
@@ -424,24 +426,24 @@ def get_standings(
 ) -> Dict[str, Any]:
     """
     Get team standings with grouping options.
-    
+
     Args:
         season: Season ID (uses default if None)
         context: Stats context ('overall', 'home', 'away')
         special: Include special team stats ('true' or 'false')
         group_by: How to group teams ('division', 'conference', 'league')
         config: AHLConfig instance
-    
+
     Returns:
         Standings data
-    
+
     Example:
         >>> standings = get_standings()  # Overall standings by division
         >>> standings = get_standings(context='home', group_by='league')
     """
     if season is None:
         season = AHLConfig.DEFAULT_SEASON if config is None else config.DEFAULT_SEASON
-    
+
     return fetch_api(
         feed='statviewfeed',
         view='teams',
@@ -462,16 +464,16 @@ def get_roster(
 ) -> Dict[str, Any]:
     """
     Get team roster with status filtering.
-    
+
     Args:
         team_id: Team ID
         season_id: Season ID (uses default if None)
         roster_status: Roster status filter ('undefined' for all, 'active', 'inactive', etc.)
         config: AHLConfig instance
-    
+
     Returns:
         Roster data with players
-    
+
     Example:
         >>> roster = get_roster(team_id=2)
         >>> roster = get_roster(team_id=2, roster_status='active')
@@ -479,7 +481,7 @@ def get_roster(
     """
     if season_id is None:
         season_id = AHLConfig.DEFAULT_SEASON if config is None else config.DEFAULT_SEASON
-    
+
     return fetch_api(
         feed='statviewfeed',
         view='roster',
@@ -508,7 +510,7 @@ def get_skater_stats(
 ) -> Dict[str, Any]:
     """
     Get skater statistics with filtering and pagination.
-    
+
     Args:
         season: Season ID (uses default if None)
         team: Team ID filter ('-1' for all teams)
@@ -520,10 +522,10 @@ def get_skater_stats(
         division: Division ID filter ('-1' for all)
         conference: Conference ID filter ('-1' for all)
         config: AHLConfig instance
-    
+
     Returns:
         Player stats data with pagination info
-    
+
     Example:
         >>> stats = get_skater_stats(limit=50)  # First 50 players
         >>> stats = get_skater_stats(team='5', rookies=1)  # Team 5 rookies
@@ -533,7 +535,7 @@ def get_skater_stats(
         season = AHLConfig.DEFAULT_SEASON if config is None else config.DEFAULT_SEASON
     if site_id is None:
         site_id = int(AHLConfig.SITE_ID)
-    
+
     return fetch_api(
         feed='statviewfeed',
         view='players',
@@ -565,7 +567,7 @@ def get_goalie_stats(
 ) -> Dict[str, Any]:
     """
     Get goalie statistics with filtering and pagination.
-    
+
     Args:
         season: Season ID (uses default if None)
         team: Team ID filter ('-1' for all teams)
@@ -578,10 +580,10 @@ def get_goalie_stats(
         division: Division ID filter ('-1' for all)
         conference: Conference ID filter ('-1' for all)
         config: AHLConfig instance
-    
+
     Returns:
         Goalie stats data with pagination info
-    
+
     Example:
         >>> stats = get_goalie_stats(qualified='qualified')
         >>> stats = get_goalie_stats(team='5', limit=10)
@@ -590,7 +592,7 @@ def get_goalie_stats(
         season = AHLConfig.DEFAULT_SEASON if config is None else config.DEFAULT_SEASON
     if site_id is None:
         site_id = int(AHLConfig.SITE_ID)
-    
+
     return fetch_api(
         feed='statviewfeed',
         view='goalies',
@@ -615,22 +617,22 @@ def get_player_profile(
 ) -> Dict[str, Any]:
     """
     Get detailed player profile and career stats.
-    
+
     Args:
         player_id: Player ID
         season_id: Season ID (uses default if None)
         config: AHLConfig instance
-    
+
     Returns:
         Player profile with bio and career stats
-    
+
     Example:
         >>> profile = get_player_profile(12345)
         >>> print(profile['name'], profile['position'])
     """
     if season_id is None:
         season_id = AHLConfig.DEFAULT_SEASON if config is None else config.DEFAULT_SEASON
-    
+
     return fetch_api(
         feed='statviewfeed',
         view='player',
@@ -655,7 +657,7 @@ def get_bootstrap(
 ) -> Dict[str, Any]:
     """
     Get bootstrap/configuration data for initializing the API.
-    
+
     Args:
         game_id: Optional game ID for game-specific bootstrap
         season: Season ('latest' or specific season ID)
@@ -664,10 +666,10 @@ def get_bootstrap(
         conference: Conference filter
         division: Division filter
         config: AHLConfig instance
-    
+
     Returns:
         Bootstrap configuration data including teams, divisions, seasons, etc.
-    
+
     Example:
         >>> bootstrap = get_bootstrap()  # Get default config
         >>> bootstrap = get_bootstrap(game_id=12345, page_name='gamecenter')
@@ -680,7 +682,7 @@ def get_bootstrap(
         'site_id': AHLConfig.SITE_ID,
         'config': config
     }
-    
+
     # Add optional filters
     if game_id is not None:
         params['game_id'] = game_id
@@ -690,7 +692,7 @@ def get_bootstrap(
         params['conference'] = conference
     if division is not None:
         params['division'] = division
-    
+
     return fetch_api(**params)
 
 
@@ -704,14 +706,14 @@ def get_all_players(
 ) -> Dict[str, List[Dict[str, Any]]]:
     """
     Get all players (skaters and goalies) for a season.
-    
+
     Args:
         season: Season ID (uses default if None)
         config: AHLConfig instance
-    
+
     Returns:
         Dict with 'skaters' and 'goalies' lists
-    
+
     Example:
         >>> all_players = get_all_players()
         >>> print(f"Skaters: {len(all_players['skaters'])}")
@@ -719,7 +721,7 @@ def get_all_players(
     """
     skaters = get_skater_stats(season=season, limit=10000, config=config)
     goalies = get_goalie_stats(season=season, limit=1000, config=config)
-    
+
     return {
         'skaters': skaters.get('players', []) if isinstance(skaters, dict) else skaters,
         'goalies': goalies.get('goalies', []) if isinstance(goalies, dict) else goalies
@@ -733,21 +735,21 @@ def get_team_schedule(
 ) -> List[Dict[str, Any]]:
     """
     Get schedule for a specific team.
-    
+
     Args:
         team_id: Team ID
         season: Season ID (uses default if None)
         config: AHLConfig instance
-    
+
     Returns:
         List of games for the team
-    
+
     Example:
         >>> schedule = get_team_schedule(team_id=2)
         >>> print(f"Team has {len(schedule)} games")
     """
     data = get_schedule(team_id=team_id, season=season, config=config)
-    
+
     if isinstance(data, dict) and 'games' in data:
         return data['games']
     return data
@@ -756,14 +758,14 @@ def get_team_schedule(
 def get_game_full_data(game_id: int, config: AHLConfig = None) -> Dict[str, Any]:
     """
     Get complete game data: preview, summary, and play-by-play.
-    
+
     Args:
         game_id: Game ID
         config: AHLConfig instance
-    
+
     Returns:
         Dict with 'preview', 'summary', and 'play_by_play' keys
-    
+
     Example:
         >>> game = get_game_full_data(12345)
         >>> print(game['summary']['final_score'])

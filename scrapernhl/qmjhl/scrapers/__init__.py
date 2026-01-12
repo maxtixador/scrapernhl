@@ -108,3 +108,10 @@ __all__ = [
     'scrape_player_shot_locations',
     'scrape_multiple_players',
 ]
+from .wrappers import (
+    scrapeScorebar,
+    scrapeSkaterStats,
+    scrapeGoalieStats,
+    scrapePlayByPlay,
+    scrapeGameSummary,
+)

@@ -11,7 +11,9 @@ The player endpoint returns:
 - Game-by-game breakdowns
 """
 
-from typing import Dict, Any, Union, Optional, List
+from __future__ import annotations
+
+from typing import Dict, Any, Union, List
 import pandas as pd
 
 from ..api import fetch_api, WHLConfig
@@ -233,12 +235,19 @@ def scrape_player_career_stats(
     Returns:
         DataFrame with career statistics, one row per season
     """
-    stats = get_player_stats(player_id, season_id, config)
+    profile = get_player_profile(player_id, season_id, 'standard', config)
 
-    if isinstance(stats, dict) and 'careerStats' in stats:
-        career_data = stats['careerStats']
-        if isinstance(career_data, list):
-            return pd.DataFrame(career_data)
+    if isinstance(profile, dict) and 'careerStats' in profile:
+        career_data = profile['careerStats']
+
+        dfs = []
+        for i in range(len(career_data[0]['sections'])):
+            df = pd.json_normalize(career_data[0]['sections'][i]['data'])
+            df = df[df["row.season_name"] != "Total"]
+            dfs.append(df)
+
+        df_career = pd.concat(dfs, ignore_index=True)
+        return df_career
 
     return pd.DataFrame()
 

@@ -19,14 +19,14 @@ from ...core.ahl_pwhl_clean import clean_ahl_pwhl
 def getAPIEvents(game_id: int, timeout: int = 10) -> Dict[str, Any]:
     """
     Fetch raw event data for a PWHL game.
-    
+
     Args:
         game_id: The unique identifier for the PWHL game
         timeout: Request timeout in seconds (default: 10)
-    
+
     Returns:
         Dictionary containing play-by-play event data
-        
+
     Example:
         >>> events = getAPIEvents(210)
     """
@@ -36,16 +36,16 @@ def getAPIEvents(game_id: int, timeout: int = 10) -> Dict[str, Any]:
 def scrape_game(game_id: int, timeout: int = 30, nhlify: bool = True) -> pd.DataFrame:
     """
     Fetch and clean play-by-play data for a PWHL game.
-    
+
     Args:
         game_id: The unique identifier for the PWHL game
         timeout: Maximum time to wait for page load in seconds (default: 30)
         nhlify: If True, merge shot+goal rows into single rows (NHL-style).
                 If False, keep separate rows for shots and goals (PWHL-style).
-    
+
     Returns:
         Cleaned DataFrame with play-by-play event data ready for analysis
-        
+
     Example:
         >>> df = scrape_game(210)
         >>> print(df['event'].value_counts())

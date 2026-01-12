@@ -1,7 +1,7 @@
 """QMJHL roster scrapers following NHL pattern."""
 
 from datetime import datetime
-from typing import Dict, List, Union, Optional
+from typing import Dict, List, Union
 
 import pandas as pd
 import polars as pl
@@ -27,18 +27,18 @@ def getRosterData(team_id: int, season: Union[int, str] = None) -> List[Dict]:
     """
     if team_id is None or not isinstance(team_id, int):
         raise InvalidTeamError(f"Invalid team_id: {team_id}")
-    
+
     if season is None:
         season = QMJHLConfig.DEFAULT_SEASON
-    
+
     console.print_info(f"Fetching QMJHL roster (team={team_id}, season={season})...")
-    
+
     try:
         response = fetch_api(
             feed='statviewfeed',
             view='roster',
-            team=team_id,
-            season=season
+            team_id=team_id,
+            season_id=season
         )
 
         # Handle different response structures

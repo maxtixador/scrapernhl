@@ -50,5 +50,18 @@ __all__ = [
     'scrape_player_career_stats',
     'scrape_player_game_log',
     'scrape_player_shot_locations',
-    'scrape_multiple_players'
+    'scrape_multiple_players',
+    # Wrapper functions
+    'scrapeScorebar',
+    'scrapeSkaterStats',
+    'scrapeGoalieStats',
+    'scrapePlayByPlay',
+    'scrapeGameSummary'
 ]
+from .wrappers import (
+    scrapeScorebar,
+    scrapeSkaterStats,
+    scrapeGoalieStats,
+    scrapePlayByPlay,
+    scrapeGameSummary,
+)

@@ -8,18 +8,29 @@ from ...core.utils import json_normalize
 from ...core.progress import console
 from ...core.cache import cached
 from ...exceptions import InvalidTeamError
-from ..api import fetch_api, WHLConfig
+from ..api import fetch_api, get_bootstrap, WHLConfig
 
 # Teams
-@cached(ttl=86400, cache_key_func=lambda season=None, **kwargs: f"whl_teams_{season}")
+@cached(ttl=86400, cache_key_func=lambda season=None, **kwargs: f"whl_teams_{season if season is not None else WHLConfig.DEFAULT_SEASON}")
 def getTeamsData(season: Union[int, str] = None) -> List[Dict]:
-    """Scrapes raw WHL teams data."""
+    """Scrapes raw WHL teams data from bootstrap."""
     if season is None:
         season = WHLConfig.DEFAULT_SEASON
     console.print_info(f"Fetching WHL teams (season={season})...")
     try:
-        response = fetch_api(feed='statviewfeed', view='teamsForSeason', season=season)
-        teams = response if isinstance(response, list) else []
+        # Use bootstrap data which contains correct teams list
+        bootstrap = get_bootstrap()
+        # Use teamsNoAll to exclude 'All Teams' entry, fall back to teams
+        if isinstance(bootstrap, dict):
+            if 'teamsNoAll' in bootstrap and len(bootstrap['teamsNoAll']) > 0:
+                teams = bootstrap['teamsNoAll']
+            elif 'teams' in bootstrap:
+                # Filter out 'All Teams' entry (id=-1)
+                teams = [t for t in bootstrap['teams'] if t.get('id') != -1 and t.get('id') != '-1']
+            else:
+                teams = []
+        else:
+            teams = []
     except Exception as e:
         raise RuntimeError(f"Error fetching teams data: {e}")
     now = datetime.utcnow().isoformat()
@@ -67,7 +78,11 @@ def getPlayerStatsData(season: Union[int, str] = None, player_type: str = 'skate
     stats_type = 'skaters' if player_type == 'skater' else 'goalies'
     console.print_info(f"Fetching WHL {stats_type} stats (season={season})...")
     try:
-        response = fetch_api(feed='statviewfeed', view='players', season=season, sort=sort, statsType='standard', first=first, limit=limit, qualified=qualified, site_id=WHLConfig.SITE_ID)
+        # Use position='goalies' parameter for goalie stats
+        if player_type == 'goalie':
+            response = fetch_api(feed='statviewfeed', view='players', position='goalies', season=season, sort=sort, statsType='standard', first=first, limit=limit, qualified=qualified, site_id=WHLConfig.SITE_ID)
+        else:
+            response = fetch_api(feed='statviewfeed', view='players', season=season, sort=sort, statsType='standard', first=first, limit=limit, qualified=qualified, site_id=WHLConfig.SITE_ID)
         players = []
         if isinstance(response, list) and len(response) > 0:
             for item in response:
@@ -85,7 +100,19 @@ def getPlayerStatsData(season: Union[int, str] = None, player_type: str = 'skate
 def scrapePlayerStats(season: Union[int, str] = None, player_type: str = 'skater', sort: str = 'points', qualified: str = 'qualified', limit: int = 50, first: int = 0, output_format: str = "pandas") -> Union[pd.DataFrame, pl.DataFrame]:
     """Scrapes WHL player stats data."""
     raw_data = getPlayerStatsData(season, player_type, sort, qualified, limit, first)
-    return json_normalize(raw_data, output_format)
+    df = json_normalize(raw_data, output_format)
+
+    # Add column aliases for compatibility with notebooks
+    if output_format == "pandas":
+        if 'shortname' in df.columns and 'name' not in df.columns:
+            df['name'] = df['shortname']
+        if player_type == 'goalie':
+            if 'goals_against_average' in df.columns and 'gaa' not in df.columns:
+                df['gaa'] = df['goals_against_average']
+            if 'save_percentage' in df.columns and 'savePct' not in df.columns:
+                df['savePct'] = df['save_percentage']
+
+    return df
 
 # Roster
 @cached(ttl=3600, cache_key_func=lambda team_id, season=None, **kwargs: f"whl_roster_{team_id}_{season}")
@@ -97,7 +124,7 @@ def getRosterData(team_id: int, season: Union[int, str] = None) -> List[Dict]:
         season = WHLConfig.DEFAULT_SEASON
     console.print_info(f"Fetching WHL roster (team={team_id}, season={season})...")
     try:
-        response = fetch_api(feed='statviewfeed', view='roster', team=team_id, season=season)
+        response = fetch_api(feed='statviewfeed', view='roster', team_id=team_id, season_id=season)
         players = []
         if isinstance(response, dict) and 'roster' in response and isinstance(response['roster'], list):
             for roster_item in response['roster']:

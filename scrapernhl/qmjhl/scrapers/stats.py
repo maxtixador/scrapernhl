@@ -1,7 +1,7 @@
 """QMJHL player and team stats scrapers following NHL pattern."""
 
 from datetime import datetime
-from typing import Dict, List, Union, Optional
+from typing import Dict, List, Union
 
 import pandas as pd
 import polars as pl
@@ -9,7 +9,6 @@ import polars as pl
 from ...core.utils import json_normalize
 from ...core.progress import console
 from ...core.cache import cached
-from ...exceptions import APIError
 from ..api import fetch_api, QMJHLConfig
 
 
@@ -39,10 +38,10 @@ def getPlayerStatsData(
     """
     if season is None:
         season = QMJHLConfig.DEFAULT_SEASON
-    
+
     stats_type = 'skaters' if player_type == 'skater' else 'goalies'
     console.print_info(f"Fetching QMJHL {stats_type} stats (season={season})...")
-    
+
     try:
         if player_type == 'skater':
             response = fetch_api(
@@ -57,9 +56,11 @@ def getPlayerStatsData(
                 site_id=QMJHLConfig.SITE_ID
             )
         else:  # goalie
+            # Use position='goalies' parameter instead of view='goalies'
             response = fetch_api(
                 feed='statviewfeed',
-                view='goalies',
+                view='players',
+                position='goalies',
                 season=season,
                 sort=sort,
                 statsType='standard',
@@ -150,9 +151,9 @@ def getTeamStatsData(season: Union[int, str] = None) -> List[Dict]:
     """
     if season is None:
         season = QMJHLConfig.DEFAULT_SEASON
-    
+
     console.print_info(f"Fetching QMJHL team stats (season={season})...")
-    
+
     try:
         response = fetch_api(
             feed='statviewfeed',

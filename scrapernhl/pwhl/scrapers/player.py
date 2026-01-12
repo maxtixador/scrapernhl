@@ -11,7 +11,9 @@ The player endpoint returns:
 - Game-by-game breakdowns
 """
 
-from typing import Dict, Any, Union, Optional, List
+from __future__ import annotations
+
+from typing import Dict, Any, Union, List
 import pandas as pd
 
 from ..api import fetch_api, PWHLConfig

@@ -18,15 +18,15 @@ def getRosterData(team_id: int, season: Union[int, str] = None) -> List[Dict]:
     """Scrapes raw OHL roster data for a specific team."""
     if team_id is None or not isinstance(team_id, int):
         raise InvalidTeamError(f"Invalid team_id: {team_id}")
-    
+
     if season is None:
         season = OHLConfig.DEFAULT_SEASON
-    
+
     console.print_info(f"Fetching OHL roster (team={team_id}, season={season})...")
-    
+
     try:
-        response = fetch_api(feed='statviewfeed', view='roster', team=team_id, season=season)
-        
+        response = fetch_api(feed='statviewfeed', view='roster', team_id=team_id, season_id=season)
+
         players = []
         if isinstance(response, dict):
             if 'roster' in response and isinstance(response['roster'], list):

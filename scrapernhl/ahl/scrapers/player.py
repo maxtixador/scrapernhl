@@ -14,7 +14,9 @@ The player endpoint returns:
 - Media assets (photos)
 """
 
-from typing import Dict, Any, Union, Optional, List
+from __future__ import annotations
+
+from typing import Dict, Any, Union, List
 import pandas as pd
 
 from ..api import fetch_api, AHLConfig
@@ -247,8 +249,8 @@ def get_player_draft_info(
     """
     profile = get_player_profile(player_id, season_id, 'standard', config)
 
-    if isinstance(profile, dict) and 'draft' in profile:
-        return profile['draft']
+    if isinstance(profile, dict) and 'draftInfo' in profile:
+        return profile['draftInfo']
 
     return {}
 
@@ -340,14 +342,26 @@ def scrape_player_career_stats(
         >>> df = scrape_player_career_stats(10036)
         >>> print(df[['season', 'league', 'team', 'gamesPlayed', 'points']])
     """
-    stats = get_player_stats(player_id, season_id, config)
+    profile = get_player_profile(player_id)
 
-    if isinstance(stats, dict) and 'careerStats' in stats:
-        career_data = stats['careerStats']
-        if isinstance(career_data, list):
-            return pd.DataFrame(career_data)
+    if isinstance(profile, dict) and 'careerStats' in profile:
+        career_data = profile['careerStats']
 
-    return pd.DataFrame()
+        dfs = []
+        for i in range(len(career_data[0]['sections'])):
+            df = pd.json_normalize(career_data[0]['sections'][i]['data'])
+            df = df[df["row.season_name"] != "Total"]
+            dfs.append(df)
+
+        df_career = pd.concat(dfs, ignore_index=True)
+        return df_career
+
+
+
+
+
+
+
 
 
 def scrape_player_game_log(
@@ -372,10 +386,13 @@ def scrape_player_game_log(
     """
     game_log = get_player_game_log(player_id, season_id, config)
 
-    if isinstance(game_log, list) and game_log:
-        return pd.DataFrame(game_log)
 
-    return pd.DataFrame()
+
+    df = pd.json_normalize(game_log[0]['sections'][0]['data'])
+
+
+    return df
+
 
 
 def scrape_player_shot_locations(

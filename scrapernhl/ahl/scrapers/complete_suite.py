@@ -7,8 +7,8 @@ import polars as pl
 from ...core.utils import json_normalize
 from ...core.progress import console
 from ...core.cache import cached
-from ...exceptions import InvalidTeamError, APIError
-from ..api import fetch_api, AHLConfig
+from ...exceptions import InvalidTeamError
+from ..api import fetch_api, get_scorebar, AHLConfig
 
 # Schedule
 @cached(ttl=3600, cache_key_func=lambda team_id=-1, season=None, month=-1, location='homeaway', **kwargs: f"ahl_schedule_{team_id}_{season}_{month}_{location}")
@@ -38,6 +38,103 @@ def scrapeSchedule(team_id: int = -1, season: Union[int, str] = None, month: int
     raw_data = getScheduleData(team_id, season, month, location)
     return json_normalize(raw_data, output_format)
 
+@cached(ttl=3600, cache_key_func=lambda team_id=None, season=None, **kwargs: f"ahl_schedule_legacy_{team_id}_{season}")
+def getScheduleLegacyData(team_id: Union[int, str] = None, season: Union[int, str] = None) -> List[Dict]:
+    """
+    Scrapes raw AHL schedule data using the scorebar endpoint (legacy method).
+
+    This endpoint provides more detailed schedule information including scores,
+    game status, venue information, and timestamps in a flattened format.
+
+    Parameters:
+    -----------
+    team_id : int or str, optional
+        The team ID to filter schedule for. If None, returns all games.
+    season : int or str, optional
+        The season ID to fetch the schedule for. If None, uses default season.
+
+    Returns:
+    --------
+    List[Dict]: List of game records with metadata
+    """
+    if season is None:
+        season = AHLConfig.DEFAULT_SEASON
+
+    console.print_info(f"Fetching AHL schedule via scorebar (team={team_id}, season={season})...")
+
+    try:
+        # Fetch data using scorebar endpoint with extended date range
+        response = get_scorebar(
+            days_ahead=365,
+            days_back=365,
+            season_id=int(season) if season else None,
+            limit=2000
+        )
+
+        # Extract scorebar data
+        games = []
+        if isinstance(response, dict) and 'Scorebar' in response:
+            games = response['Scorebar']
+        elif isinstance(response, list):
+            games = response
+
+        # Filter by team_id if provided
+        if team_id is not None:
+            team_id_str = str(team_id)
+            games = [
+                g for g in games
+                if isinstance(g, dict) and (
+                    str(g.get('HomeID')) == team_id_str or
+                    str(g.get('VisitorID')) == team_id_str
+                )
+            ]
+
+        # Filter by season
+        if season is not None:
+            season_filters = [season, int(season) if str(season).isdigit() else season, str(season)]
+            games = [
+                g for g in games
+                if isinstance(g, dict) and g.get('SeasonID') in season_filters
+            ]
+
+    except Exception as e:
+        raise RuntimeError(f"Error fetching legacy schedule data: {e}")
+
+    now = datetime.utcnow().isoformat()
+    return [{**record, "scrapedOn": now, "source": "AHL Scorebar API"} for record in games if isinstance(record, dict)]
+
+def scrapeScheduleLegacy(team_id: Union[int, str] = None, season: Union[int, str] = None, output_format: str = "pandas") -> Union[pd.DataFrame, pl.DataFrame]:
+    """
+    Scrapes AHL schedule data using the scorebar endpoint (legacy method).
+
+    This method uses the scorebar API which provides more detailed information
+    than the standard schedule endpoint, including real-time scores, game status,
+    and venue details.
+
+    Parameters:
+    -----------
+    team_id : int or str, optional
+        The team ID to filter schedule for. If None, returns all games.
+    season : int or str, optional
+        The season ID to fetch the schedule for. If None, uses default season.
+    output_format : str, default "pandas"
+        Output format: "pandas" or "polars"
+
+    Returns:
+    --------
+    pd.DataFrame or pl.DataFrame: Schedule data with metadata
+
+    Example:
+    --------
+    >>> # Get all games for season
+    >>> df = scrapeScheduleLegacy(season=77)
+    >>>
+    >>> # Get schedule for specific team
+    >>> df = scrapeScheduleLegacy(team_id=20, season=77)
+    """
+    raw_data = getScheduleLegacyData(team_id, season)
+    return json_normalize(raw_data, output_format)
+
 # Teams
 @cached(ttl=86400, cache_key_func=lambda season=None, **kwargs: f"ahl_teams_{season}")
 def getTeamsData(season: Union[int, str] = None) -> List[Dict]:
@@ -47,7 +144,13 @@ def getTeamsData(season: Union[int, str] = None) -> List[Dict]:
     console.print_info(f"Fetching AHL teams (season={season})...")
     try:
         response = fetch_api(feed='statviewfeed', view='teamsForSeason', season=season)
-        teams = response if isinstance(response, list) else []
+        # Handle both dict (with 'teams' key) and list responses
+        if isinstance(response, dict) and 'teams' in response:
+            teams = response['teams']
+        elif isinstance(response, list):
+            teams = response
+        else:
+            teams = []
     except Exception as e:
         raise RuntimeError(f"Error fetching teams data: {e}")
     now = datetime.utcnow().isoformat()
@@ -125,7 +228,7 @@ def getRosterData(team_id: int, season: Union[int, str] = None) -> List[Dict]:
         season = AHLConfig.DEFAULT_SEASON
     console.print_info(f"Fetching AHL roster (team={team_id}, season={season})...")
     try:
-        response = fetch_api(feed='statviewfeed', view='roster', team=team_id, season=season)
+        response = fetch_api(feed='statviewfeed', view='roster', team_id=team_id, season_id=season)
         players = []
         if isinstance(response, dict) and 'roster' in response and isinstance(response['roster'], list):
             for roster_item in response['roster']:

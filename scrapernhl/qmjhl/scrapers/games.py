@@ -14,21 +14,17 @@ Features:
 Usage:
     # Sync API calls
     events = getAPIEvents(41450)
-    
+
     # Async Playwright scraping
     events = await scrape_game_async(41450)
-    
+
     # Sync wrapper for Playwright scraping
     events = scrape_game(41450)
 """
 
 from __future__ import annotations
 
-import asyncio
-import json
-import re
-from typing import Any, Dict, List, Optional, Tuple
-from urllib.parse import urljoin
+from typing import Any, Dict
 import pandas as pd
 import numpy as np
 
@@ -49,18 +45,18 @@ import requests
 def getAPIEvents(game_id: int, timeout: int = 10) -> Dict[str, Any]:
     """
     Fetch raw event data for a given game ID from the QMJHL API.
-    
+
     Args:
         game_id: The unique identifier for the game
         timeout: Request timeout in seconds (default: 10)
-    
+
     Returns:
         Dictionary containing play-by-play event data
-        
+
     Raises:
         requests.RequestException: If the API request fails
         KeyError: If the response format is unexpected
-        
+
     Example:
         >>> events = getAPIEvents(41450)
         >>> print(events.keys())
@@ -87,39 +83,39 @@ def getAPIEvents(game_id: int, timeout: int = 10) -> Dict[str, Any]:
 def scrape_game(game_id: int, timeout: int = 30, nhlify: bool = True) -> pd.DataFrame:
     """
     Fetch and clean play-by-play data for a QMJHL game.
-    
+
     Args:
         game_id: The unique identifier for the game
         timeout: Maximum time to wait for page load in seconds (default: 30)
         nhlify: If True, merge shot+goal rows into single rows (NHL-style).
                 If False, keep separate rows for shots and goals (QMJHL-style).
-    
+
     Returns:
         Cleaned DataFrame with play-by-play event data ready for analysis
-        
+
     Raises:
         RuntimeError: If Playwright is not installed
         Exception: Propagates exceptions from the async function
-        
+
     Example:
         >>> df = scrape_game(31171)
         >>> print(df['event'].value_counts())
-        >>> 
+        >>>
         >>> # Keep QMJHL-style separate shot/goal rows
         >>> df_qmjhl = scrape_game(31171, nhlify=False)
     """
-    
+
     data = getAPIEvents(game_id)
-    
+
     df = pd.DataFrame(data)
     df["game_id"] = int(game_id)
     df = df.pipe(clean_pbp, nhlify=nhlify)
-    
+
     return df
-    
- 
- 
- 
+
+
+
+
 
 def _expand_on_ice_wide(df: pd.DataFrame, col: str, prefix: str, drop_source: bool = False) -> pd.DataFrame:
     """
@@ -176,19 +172,19 @@ def _expand_on_ice_wide(df: pd.DataFrame, col: str, prefix: str, drop_source: bo
 def clean_pbp(pbp: pd.DataFrame, nhlify: bool = True) -> pd.DataFrame:
     """
     Clean and standardize QMJHL play-by-play data.
-    
+
     Args:
         pbp: Raw play-by-play DataFrame from getAPIEvents
         nhlify: If True, merge shot+goal rows into single goal rows (NHL-style).
                 If False, keep separate rows for shots and goals (QMJHL-style).
-    
+
     Returns:
         Cleaned DataFrame ready for analysis with standardized columns
     """
     df = pbp.copy()
-    
+
     df["orderIdx"] = np.arange(len(df))
-    
+
     # ensure target cols exist
     new_cols = [
         "event_detail",
@@ -327,7 +323,7 @@ def clean_pbp(pbp: pd.DataFrame, nhlify: bool = True) -> pd.DataFrame:
         "player2Team": "player_served_info.team_code",
         "player2TeamId": "player_served_info.team_id",
     })
-    
+
     df.loc[m_pen, "period"] = pd.to_numeric(df.loc[m_pen, "period"].str.extract(r"(\d+)")[0], errors="coerce")
 
     # goal
@@ -354,7 +350,7 @@ def clean_pbp(pbp: pd.DataFrame, nhlify: bool = True) -> pd.DataFrame:
         "player3Team": "assist2_player.team_code",
         "player3TeamId": "assist2_player.team_id",
     })
-    
+
     if "plus" not in df.columns:
         df["plus"] = pd.NA
         df["minus"] = pd.NA
@@ -362,11 +358,11 @@ def clean_pbp(pbp: pd.DataFrame, nhlify: bool = True) -> pd.DataFrame:
         df["n_minus"] = pd.NA
         df["homeSkaters"] = pd.NA
         df["awaySkaters"] = pd.NA
-        
+
     else:
         df["n_plus"] = df["plus"].apply(lambda x: len(x) if isinstance(x, list) else np.nan)
         df["n_minus"] = df["minus"].apply(lambda x: len(x) if isinstance(x, list) else np.nan)
-        
+
         df["homeSkaters"] = np.where(
             df["home"].eq(1) & df["n_plus"].notna() & df["n_minus"].notna(),
             df["n_plus"],
@@ -418,15 +414,15 @@ def clean_pbp(pbp: pd.DataFrame, nhlify: bool = True) -> pd.DataFrame:
 
     # optional: remove duplicates while preserving order
     columns_to_delete = list(dict.fromkeys(columns_to_delete))
-    
+
     df = df.drop(columns=[c for c in columns_to_delete if c in df.columns])
-    
+
     has_playoff_OT = df["period"].unique().tolist()
     has_playoff_OT = any(isinstance(p, str) and "OT" in p for p in has_playoff_OT)
     # convert period like "1st OT" to 4
     df["period"] = df["period"].replace({"1st OT": 4, "2nd OT": 5, "3rd OT": 6, "4th OT": 7, "5th OT": 8,
                                          "6th OT": 9, "7th OT": 10, "8th OT": 11, "9th OT": 12})
-    
+
     # period - handle period_id column check
     if "period_id" in df.columns:
         df["period"] = np.where(
@@ -434,23 +430,23 @@ def clean_pbp(pbp: pd.DataFrame, nhlify: bool = True) -> pd.DataFrame:
             df["period_id"],
             df["period"])
         df = df.drop(["period_id"], axis=1)
-    
+
     df["period"] = pd.to_numeric(df["period"], errors="coerce")
-    
+
     # ffill non shootout periods
     m_so_event = df["event"].eq("shootout")
-    
+
     if has_playoff_OT:
         # for playoff OT, fill forward and backward to handle gaps
         df.loc[~m_so_event, "period"] = df.loc[~m_so_event].groupby("game_id")["period"].ffill().bfill()
     else:
         # for regular season, fill forward and backward, then fillna with 5 for shootout
         df.loc[~m_so_event, "period"] = df.loc[~m_so_event].groupby("game_id")["period"].ffill().bfill().fillna(5)
-    
+
     # Check if 's' column exists before using it
     if "s" in df.columns:
         df.loc[df["period"].notnull(), "elapsedTime"] = df["s"] + (df["period"] - 1).clip(upper=4) * 20 * 60
-    
+
     # ensure correct ordering within each game
     df = df.sort_values(["game_id", "elapsedTime", "orderIdx"], kind="mergesort")
 
@@ -468,7 +464,7 @@ def clean_pbp(pbp: pd.DataFrame, nhlify: bool = True) -> pd.DataFrame:
 
     # cleanup
     df = df.drop(columns=["_home_goal", "_away_goal"])
-    
+
     # x, y coordinates
     if "x_location" in df.columns and "y_location" in df.columns:
         df["x_norm"] = df["x_location"]
@@ -477,23 +473,23 @@ def clean_pbp(pbp: pd.DataFrame, nhlify: bool = True) -> pd.DataFrame:
         # home team shoots left → flip x
         m_home = df["home"].eq(1)
         df.loc[m_home, "x_norm"] = 600 - df.loc[m_home, "x_location"]
-        
+
         # y stays the same
         df["x"] = (df["x_norm"] - 300) / 3.0
         df["y"] = (df["y_norm"] - 150) / 3.0
-        
+
         dx = 600 - df["x_norm"]
         dy = 150 - df["y_norm"]
 
         df["shot_distance_ft"] = (dx**2 + dy**2) ** 0.5 / 3.0
         df["shot_angle_deg"] = abs(np.degrees(np.arctan2(dy, dx)))
-    
+
     # goal_type handling
     if "goal_type_name" in df.columns:
         df["goal_type_name"] = df["goal_type_name"].replace({"": "EV", "EN": "EN.EV"})
     if "goal_type" in df.columns:
         df["goal_type"] = df["goal_type"].replace({"": "EV", "EN": "EN.EV"})
-    
+
     # ensure correct order
     df = df.sort_values(["game_id", "elapsedTime", "orderIdx"], kind="mergesort")
 
@@ -504,34 +500,34 @@ def clean_pbp(pbp: pd.DataFrame, nhlify: bool = True) -> pd.DataFrame:
         # Create shifted columns to check next event
         df["_next_event"] = df.groupby("game_id")["event"].shift(-1)
         df["_next_time"] = df.groupby("game_id")["elapsedTime"].shift(-1)
-        
+
         # For shots that are followed by goals at the same time, copy shot data to the goal row
         m_shot_before_goal = (
             df["event"].isin(["shot", "penaltyshot"]) &
             (df["_next_event"] == "goal") &
             (df["elapsedTime"] == df["_next_time"])
         )
-        
+
         # Copy ALL data from shot row to goal row where goal has NA but shot doesn't
         if m_shot_before_goal.any():
             shot_indices = df[m_shot_before_goal].index
             goal_indices = shot_indices + 1
-            
+
             # Ensure goal_indices are valid
             valid_mask = goal_indices < len(df)
             shot_indices = shot_indices[valid_mask]
             goal_indices = goal_indices[valid_mask]
-            
+
             # Get columns to potentially copy (exclude meta columns)
             cols_to_skip = ["game_id", "event", "orderIdx", "_next_event", "_next_time"]
             cols_to_check = [c for c in df.columns if c not in cols_to_skip]
-            
+
             # For each pair, copy shot data where goal has NA
             for shot_idx, goal_idx in zip(shot_indices, goal_indices):
                 for col in cols_to_check:
                     goal_val = df.at[goal_idx, col]
                     shot_val = df.at[shot_idx, col]
-                    
+
                     # Handle different types of values
                     try:
                         # Check if goal value is NA/None/empty
@@ -541,7 +537,7 @@ def clean_pbp(pbp: pd.DataFrame, nhlify: bool = True) -> pd.DataFrame:
                             (isinstance(goal_val, float) and pd.isna(goal_val)) or
                             (isinstance(goal_val, str) and goal_val == '')
                         )
-                        
+
                         # Check if shot value is not NA/None/empty
                         shot_has_value = (
                             shot_val is not None and
@@ -549,20 +545,20 @@ def clean_pbp(pbp: pd.DataFrame, nhlify: bool = True) -> pd.DataFrame:
                             not (isinstance(shot_val, float) and pd.isna(shot_val)) and
                             not (isinstance(shot_val, str) and shot_val == '')
                         )
-                        
+
                         # Copy if goal is NA and shot has value
                         if goal_is_na and shot_has_value:
                             df.at[goal_idx, col] = shot_val
                     except (ValueError, TypeError):
                         # Skip columns that can't be compared (like lists/arrays)
                         continue
-        
+
         # Now remove the redundant shot rows
         df = df[~m_shot_before_goal].copy()
-        
+
         # Clean up temporary columns
         df = df.drop(columns=["_next_event", "_next_time"], errors="ignore")
-        
+
         # Reset order index after removal
         df = df.reset_index(drop=True)
         df["orderIdx"] = np.arange(len(df))
@@ -571,15 +567,15 @@ def clean_pbp(pbp: pd.DataFrame, nhlify: bool = True) -> pd.DataFrame:
     id_cols = [c for c in df.columns if str(c).endswith("Id")]
 
     if id_cols:
-        df[id_cols] = df[id_cols].apply(lambda s: pd.to_numeric(s, errors="coerce"))    
-   
+        df[id_cols] = df[id_cols].apply(lambda s: pd.to_numeric(s, errors="coerce"))
+
     df["scrapeOn"] = pd.Timestamp.now(tz="UTC")
-    
+
     # Drop orderIdx (was only used for sorting)
     df = df.drop(columns=["orderIdx"], errors="ignore")
-    
+
     return df
-   
+
 
 # Maintain backward compatibility
 __all__ = [

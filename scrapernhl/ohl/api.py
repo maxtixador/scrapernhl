@@ -7,6 +7,8 @@ Provides access to games, schedules, teams, rosters, player stats, and more.
 The OHL uses the same LeagueStat platform structure as other HockeyTech leagues.
 """
 
+from __future__ import annotations
+
 import time
 import json
 import logging
@@ -23,23 +25,23 @@ logger = logging.getLogger(__name__)
 
 class OHLConfig:
     """Configuration for OHL API access."""
-    
+
     # API credentials
     API_KEY = "f1aa699db3d81487"
     CLIENT_CODE = "ohl"
     LEAGUE_ID = "1"  # use current league id from bootstrap
     SITE_ID = "1"    # site_id used by current OHL feed
-    
+
     # Defaults
     DEFAULT_SEASON = "83"  # Update to current OHL season
-    
+
     # Rate limiting
     RATE_LIMIT_CALLS = 2
     RATE_LIMIT_PERIOD = 1.0
-    
+
     # API base URL
     BASE_URL = "https://lscluster.hockeytech.com/feed/index.php"
-    
+
     def __init__(
         self,
         api_key: str = None,
@@ -59,24 +61,24 @@ class OHLConfig:
 
 class RateLimiter:
     """Simple rate limiter using sliding window."""
-    
+
     def __init__(self, calls: int, period: float):
         self.calls = calls
         self.period = period
         self.timestamps: List[float] = []
-    
+
     def __call__(self, func):
         @wraps(func)
         def wrapper(*args, **kwargs):
             now = time.time()
             self.timestamps = [ts for ts in self.timestamps if now - ts < self.period]
-            
+
             if len(self.timestamps) >= self.calls:
                 sleep_time = self.period - (now - self.timestamps[0])
                 if sleep_time > 0:
                     logger.debug(f"Rate limit reached, sleeping {sleep_time:.2f}s")
                     time.sleep(sleep_time)
-            
+
             self.timestamps.append(time.time())
             return func(*args, **kwargs)
         return wrapper
@@ -89,7 +91,7 @@ class RateLimiter:
 def clean_jsonp(text: str) -> str:
     """Remove JSONP wrapper from response."""
     text = text.strip()
-    
+
     if text.startswith('angular.callbacks.'):
         start = text.find('(')
         if start != -1:
@@ -101,7 +103,7 @@ def clean_jsonp(text: str) -> str:
     # Handle plain parentheses wrapper
     elif text.startswith('(') and text.endswith(')'):
         text = text[1:-1]
-    
+
     return text
 
 
@@ -115,7 +117,7 @@ def fetch_api(
     """Generic API fetch function with rate limiting."""
     if config is None:
         config = OHLConfig()
-    
+
     query_params = {
         'feed': feed,
         'view': view,
@@ -124,21 +126,21 @@ def fetch_api(
         'league_id': config.LEAGUE_ID,
         **params
     }
-    
+
     logger.debug(f"Fetching {view} with params: {query_params}")
-    
+
     try:
         response = requests.get(config.BASE_URL, params=query_params, timeout=30)
         response.raise_for_status()
-        
+
         clean_text = clean_jsonp(response.text)
         data = json.loads(clean_text)
-        
+
         if isinstance(data, dict) and 'SiteKit' in data:
             return data['SiteKit']
-        
+
         return data
-        
+
     except requests.RequestException as e:
         logger.error(f"HTTP error fetching {view}: {e}")
         raise
@@ -163,7 +165,7 @@ def get_scorebar(
 ) -> Dict[str, Any]:
     """Get live games and upcoming schedule (scorebar)."""
     from datetime import datetime, timedelta
-    
+
     # Calculate date range (API requires explicit dates, not relative days)
     today = datetime.now()
     date_from = (today - timedelta(days=days_back)).strftime('%Y-%m-%d')
@@ -184,7 +186,7 @@ def get_scorebar(
 
     if season is None:
         season = config.DEFAULT_SEASON if config else OHLConfig.DEFAULT_SEASON
-    
+
     params = {
         'date_from': date_from,
         'date_to': date_to,
@@ -214,7 +216,7 @@ def get_schedule(
     """Get full season schedule."""
     if season is None:
         season = OHLConfig.DEFAULT_SEASON if config is None else config.DEFAULT_SEASON
-    
+
     return fetch_api(
         feed='statviewfeed',
         view='schedule',
@@ -257,7 +259,7 @@ def get_play_by_play(game_id: int, config: OHLConfig = None) -> List[Dict[str, A
         game_id=game_id,
         config=config
     )
-    
+
     if isinstance(data, list):
         return data
     elif isinstance(data, dict) and 'events' in data:
@@ -273,7 +275,7 @@ def get_teams(season: Union[int, str] = None, config: OHLConfig = None) -> Dict[
     """Get all teams for a season."""
     if season is None:
         season = OHLConfig.DEFAULT_SEASON if config is None else config.DEFAULT_SEASON
-    
+
     return fetch_api(
         feed='statviewfeed',
         view='teamsForSeason',
@@ -292,7 +294,7 @@ def get_standings(
     """Get team standings with grouping options."""
     if season is None:
         season = OHLConfig.DEFAULT_SEASON if config is None else config.DEFAULT_SEASON
-    
+
     return fetch_api(
         feed='statviewfeed',
         view='teams',
@@ -314,7 +316,7 @@ def get_roster(
     """Get team roster with status filtering."""
     if season_id is None:
         season_id = OHLConfig.DEFAULT_SEASON if config is None else config.DEFAULT_SEASON
-    
+
     return fetch_api(
         feed='statviewfeed',
         view='roster',
@@ -368,7 +370,19 @@ def get_skater_stats(
     if conference != '-1':
         params['conference'] = conference
 
-    return fetch_api(config=config, **params)
+    raw_data = fetch_api(config=config, **params)
+
+    # Extract player stats from nested structure
+    # API returns: [{"sections": [{"data": [{"row": {...player stats...}}]}]}]
+    players = []
+    if isinstance(raw_data, list) and len(raw_data) > 0:
+        sections = raw_data[0].get('sections', [])
+        if sections and len(sections) > 0:
+            data = sections[0].get('data', [])
+            players = [item.get('row', {}) for item in data if 'row' in item]
+
+    # Return in SiteKit format for compatibility
+    return {'SiteKit': {'PlayerStats': players}}
 
 
 def get_goalie_stats(
@@ -416,7 +430,19 @@ def get_goalie_stats(
     if conference != '-1':
         params['conference'] = conference
 
-    return fetch_api(config=config, **params)
+    raw_data = fetch_api(config=config, **params)
+
+    # Extract goalie stats from nested structure
+    # API returns: [{"sections": [{"data": [{"row": {...goalie stats...}}]}]}]
+    goalies = []
+    if isinstance(raw_data, list) and len(raw_data) > 0:
+        sections = raw_data[0].get('sections', [])
+        if sections and len(sections) > 0:
+            data = sections[0].get('data', [])
+            goalies = [item.get('row', {}) for item in data if 'row' in item]
+
+    # Return in SiteKit format for compatibility
+    return {'SiteKit': {'GoalieStats': goalies}}
 
 
 def get_player_profile(
@@ -427,7 +453,7 @@ def get_player_profile(
     """Get detailed player profile and career stats."""
     if season_id is None:
         season_id = OHLConfig.DEFAULT_SEASON if config is None else config.DEFAULT_SEASON
-    
+
     return fetch_api(
         feed='statviewfeed',
         view='player',
@@ -459,7 +485,7 @@ def get_bootstrap(
         'site_id': OHLConfig.SITE_ID,
         'config': config
     }
-    
+
     if game_id is not None:
         params['game_id'] = game_id
     if league_code is not None:
@@ -468,7 +494,7 @@ def get_bootstrap(
         params['conference'] = conference
     if division is not None:
         params['division'] = division
-    
+
     return fetch_api(**params)
 
 
@@ -483,7 +509,7 @@ def get_all_players(
     """Get all players (skaters and goalies) for a season."""
     skaters = get_skater_stats(season=season, limit=10000, config=config)
     goalies = get_goalie_stats(season=season, limit=1000, config=config)
-    
+
     return {
         'skaters': skaters.get('players', []) if isinstance(skaters, dict) else skaters,
         'goalies': goalies.get('goalies', []) if isinstance(goalies, dict) else goalies
@@ -497,7 +523,7 @@ def get_team_schedule(
 ) -> List[Dict[str, Any]]:
     """Get schedule for a specific team."""
     data = get_schedule(team_id=team_id, season=season, config=config)
-    
+
     if isinstance(data, dict) and 'games' in data:
         return data['games']
     return data

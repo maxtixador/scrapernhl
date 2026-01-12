@@ -1,6 +1,6 @@
 [project]
 name = "scrapernhl"
-version = "0.1.4"
+version = "0.1.5"
 description = "A comprehensive Python package for scraping and analyzing NHL data with built-in Expected Goals (xG) modeling"
 readme = "README.md"
 requires-python = ">=3.9"
@@ -97,9 +97,6 @@ python_classes = ["Test*"]
 python_functions = ["test_*"]
 addopts = [
     "--verbose",
-    "--cov=scrapernhl",
-    "--cov-report=html",
-    "--cov-report=term-missing",
 ]
 markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",

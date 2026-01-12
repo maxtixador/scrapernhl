@@ -1,7 +1,7 @@
 """QMJHL schedule data scrapers following NHL pattern."""
 
 from datetime import datetime
-from typing import Dict, List, Union, Optional
+from typing import Dict, List, Union
 
 import pandas as pd
 import polars as pl
@@ -10,8 +10,8 @@ from ...core.http import fetch_json
 from ...core.utils import json_normalize
 from ...core.progress import console
 from ...core.cache import cached
-from ...exceptions import APIError, InvalidTeamError, InvalidSeasonError
-from ..api import fetch_api, QMJHLConfig
+from ...exceptions import APIError, InvalidTeamError
+from ..api import fetch_api, get_scorebar, QMJHLConfig
 
 
 @cached(ttl=3600, cache_key_func=lambda team_id=-1, season=None, month=-1, location='homeaway', **kwargs: f"qmjhl_schedule_{team_id}_{season}_{month}_{location}")
@@ -38,9 +38,9 @@ def getScheduleData(
     """
     if season is None:
         season = QMJHLConfig.DEFAULT_SEASON
-    
+
     console.print_info(f"Fetching QMJHL schedule (team={team_id}, season={season})...")
-    
+
     try:
         response = fetch_api(
             feed='statviewfeed',
@@ -62,16 +62,30 @@ def getScheduleData(
                 if isinstance(item, dict) and 'sections' in item:
                     for section in item['sections']:
                         if 'data' in section:
-                            # Extract 'row' from each data item
+                            # Extract 'row' and 'prop' from each data item
                             for data_item in section['data']:
                                 if isinstance(data_item, dict) and 'row' in data_item:
-                                    games.append(data_item['row'])
+                                    game_record = data_item['row'].copy()
+                                    # Extract game_id from prop.game_summary.gameLink
+                                    if 'prop' in data_item and isinstance(data_item['prop'], dict):
+                                        if 'game_summary' in data_item['prop'] and isinstance(data_item['prop']['game_summary'], dict):
+                                            game_id = data_item['prop']['game_summary'].get('gameLink')
+                                            if game_id:
+                                                game_record['game_id'] = game_id
+                                    games.append(game_record)
         elif isinstance(response, dict) and 'sections' in response:
             for section in response['sections']:
                 if 'data' in section:
                     for data_item in section['data']:
                         if isinstance(data_item, dict) and 'row' in data_item:
-                            games.append(data_item['row'])
+                            game_record = data_item['row'].copy()
+                            # Extract game_id from prop.game_summary.gameLink
+                            if 'prop' in data_item and isinstance(data_item['prop'], dict):
+                                if 'game_summary' in data_item['prop'] and isinstance(data_item['prop']['game_summary'], dict):
+                                    game_id = data_item['prop']['game_summary'].get('gameLink')
+                                    if game_id:
+                                        game_record['game_id'] = game_id
+                            games.append(game_record)
         else:
             games = []
 
@@ -114,11 +128,11 @@ def getScorebarData(
     """
     if season is None:
         season = QMJHLConfig.DEFAULT_SEASON
-    
+
     console.print_info(f"Fetching QMJHL scorebar (team={team_id}, season={season})...")
-    
+
     url = f"https://lscluster.hockeytech.com/feed/?feed=modulekit&key={QMJHLConfig.API_KEY}&view=scorebar&client_code={QMJHLConfig.CLIENT_CODE}&numberofdaysahead={days_ahead}&numberofdaysback={days_back}&season_id={season}&team_id={team_id}&lang_code=en&fmt=json"
-    
+
     try:
         response = fetch_json(url)
 
@@ -194,9 +208,110 @@ def scrapeScorebar(
     return json_normalize(raw_data, output_format)
 
 
+@cached(ttl=3600, cache_key_func=lambda team_id=None, season=None, **kwargs: f"qmjhl_schedule_legacy_{team_id}_{season}")
+def getScheduleLegacyData(team_id: Union[int, str] = None, season: Union[int, str] = None) -> List[Dict]:
+    """
+    Scrapes raw QMJHL schedule data using the scorebar endpoint (legacy method).
+
+    This endpoint provides more detailed schedule information including scores,
+    game status, venue information, and timestamps in a flattened format.
+
+    Parameters:
+    -----------
+    team_id : int or str, optional
+        The team ID to filter schedule for. If None, returns all games.
+    season : int or str, optional
+        The season ID to fetch the schedule for. If None, uses default season.
+
+    Returns:
+    --------
+    List[Dict]: List of game records with metadata
+    """
+    if season is None:
+        season = QMJHLConfig.DEFAULT_SEASON
+
+    console.print_info(f"Fetching QMJHL schedule via scorebar (team={team_id}, season={season})...")
+
+    try:
+        # Fetch data using scorebar endpoint with extended date range
+        response = get_scorebar(
+            days_ahead=365,
+            days_back=365,
+            season_id=int(season) if season else None,
+            limit=2000
+        )
+
+        # Extract scorebar data
+        games = []
+        if isinstance(response, dict) and 'Scorebar' in response:
+            games = response['Scorebar']
+        elif isinstance(response, list):
+            games = response
+
+        # Filter by team_id if provided
+        if team_id is not None:
+            team_id_str = str(team_id)
+            games = [
+                g for g in games
+                if isinstance(g, dict) and (
+                    str(g.get('HomeID')) == team_id_str or
+                    str(g.get('VisitorID')) == team_id_str
+                )
+            ]
+
+        # Filter by season
+        if season is not None:
+            season_filters = [season, int(season) if str(season).isdigit() else season, str(season)]
+            games = [
+                g for g in games
+                if isinstance(g, dict) and g.get('SeasonID') in season_filters
+            ]
+
+    except Exception as e:
+        raise RuntimeError(f"Error fetching legacy schedule data: {e}")
+
+    now = datetime.utcnow().isoformat()
+    return [{**record, "scrapedOn": now, "source": "QMJHL Scorebar API"} for record in games if isinstance(record, dict)]
+
+
+def scrapeScheduleLegacy(team_id: Union[int, str] = None, season: Union[int, str] = None, output_format: str = "pandas") -> Union[pd.DataFrame, pl.DataFrame]:
+    """
+    Scrapes QMJHL schedule data using the scorebar endpoint (legacy method).
+
+    This method uses the scorebar API which provides more detailed information
+    than the standard schedule endpoint, including real-time scores, game status,
+    and venue details.
+
+    Parameters:
+    -----------
+    team_id : int or str, optional
+        The team ID to filter schedule for. If None, returns all games.
+    season : int or str, optional
+        The season ID to fetch the schedule for. If None, uses default season.
+    output_format : str, default "pandas"
+        Output format: "pandas" or "polars"
+
+    Returns:
+    --------
+    pd.DataFrame or pl.DataFrame: Schedule data with metadata
+
+    Example:
+    --------
+    >>> # Get all games for season
+    >>> df = scrapeScheduleLegacy(season=211)
+    >>>
+    >>> # Get schedule for specific team
+    >>> df = scrapeScheduleLegacy(team_id=18, season=211)
+    """
+    raw_data = getScheduleLegacyData(team_id, season)
+    return json_normalize(raw_data, output_format)
+
+
 __all__ = [
     'getScheduleData',
     'getScorebarData',
     'scrapeSchedule',
-    'scrapeScorebar'
+    'scrapeScorebar',
+    'getScheduleLegacyData',
+    'scrapeScheduleLegacy'
 ]

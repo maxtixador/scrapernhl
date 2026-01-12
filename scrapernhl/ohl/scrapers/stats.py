@@ -17,13 +17,17 @@ def getPlayerStatsData(season: Union[int, str] = None, player_type: str = 'skate
     """Scrapes raw OHL player stats data."""
     if season is None:
         season = OHLConfig.DEFAULT_SEASON
-    
+
     stats_type = 'skaters' if player_type == 'skater' else 'goalies'
     console.print_info(f"Fetching OHL {stats_type} stats (season={season})...")
-    
+
     try:
-        response = fetch_api(feed='statviewfeed', view='players', season=season, sort=sort, statsType='standard', first=first, limit=limit, qualified=qualified, site_id=OHLConfig.SITE_ID)
-        
+        # Use position='goalies' parameter for goalie stats
+        if player_type == 'goalie':
+            response = fetch_api(feed='statviewfeed', view='players', position='goalies', season=season, sort=sort, statsType='standard', first=first, limit=limit, qualified=qualified, site_id=OHLConfig.SITE_ID)
+        else:
+            response = fetch_api(feed='statviewfeed', view='players', season=season, sort=sort, statsType='standard', first=first, limit=limit, qualified=qualified, site_id=OHLConfig.SITE_ID)
+
         players = []
         if isinstance(response, list) and len(response) > 0:
             for item in response:

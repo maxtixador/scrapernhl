@@ -20,6 +20,13 @@ from .player import (
     scrape_player_shot_locations,
     scrape_multiple_players,
 )
+from .wrappers import (
+    scrapeScorebar,
+    scrapeSkaterStats,
+    scrapeGoalieStats,
+    scrapePlayByPlay,
+    scrapeGameSummary,
+)
 
 __all__ = [
     'scrape_game',
@@ -34,6 +41,11 @@ __all__ = [
     'scrapePlayerStats',
     'getRosterData',
     'scrapeRoster',
+    'scrapeScorebar',
+    'scrapeSkaterStats',
+    'scrapeGoalieStats',
+    'scrapePlayByPlay',
+    'scrapeGameSummary',
     'get_player_profile',
     'get_player_bio',
     'get_player_stats',

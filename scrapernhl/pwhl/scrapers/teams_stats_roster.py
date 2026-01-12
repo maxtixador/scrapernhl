@@ -19,7 +19,13 @@ def getTeamsData(season: Union[int, str] = None) -> List[Dict]:
     console.print_info(f"Fetching PWHL teams (season={season})...")
     try:
         response = fetch_api(feed='statviewfeed', view='teamsForSeason', season=season)
-        teams = response if isinstance(response, list) else []
+        # Handle both dict (with 'teams' key) and list responses
+        if isinstance(response, dict) and 'teams' in response:
+            teams = response['teams']
+        elif isinstance(response, list):
+            teams = response
+        else:
+            teams = []
     except Exception as e:
         raise RuntimeError(f"Error fetching teams data: {e}")
     now = datetime.utcnow().isoformat()
@@ -97,7 +103,7 @@ def getRosterData(team_id: int, season: Union[int, str] = None) -> List[Dict]:
         season = PWHLConfig.DEFAULT_SEASON
     console.print_info(f"Fetching PWHL roster (team={team_id}, season={season})...")
     try:
-        response = fetch_api(feed='statviewfeed', view='roster', team=team_id, season=season)
+        response = fetch_api(feed='statviewfeed', view='roster', team_id=team_id, season_id=season)
         players = []
         if isinstance(response, dict) and 'roster' in response and isinstance(response['roster'], list):
             for roster_item in response['roster']:

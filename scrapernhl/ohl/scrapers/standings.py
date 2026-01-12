@@ -17,12 +17,12 @@ def getStandingsData(season: Union[int, str] = None, context: str = 'overall', s
     """Scrapes raw OHL standings data."""
     if season is None:
         season = OHLConfig.DEFAULT_SEASON
-    
+
     console.print_info(f"Fetching OHL standings (season={season}, context={context})...")
-    
+
     try:
         response = fetch_api(feed='statviewfeed', view='teams', groupTeamsBy=group_by, context=context, special=special, season=season)
-        
+
         teams = []
         if isinstance(response, list) and len(response) > 0:
             for item in response:
