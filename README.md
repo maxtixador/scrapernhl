@@ -1,6 +1,6 @@
 # ScraperNHL
 
-Python package for scraping and analyzing NHL data with built-in Expected Goals (xG) modeling and multi-league support architecture.
+Python package for scraping and analyzing Hockey (*not only NHL anymore*) data with built-in Expected Goals (xG) modeling and multi-league support architecture.
 
 [![Documentation](https://img.shields.io/badge/docs-mkdocs-blue)](https://maxtixador.github.io/scrapernhl/)
 [![Python Version](https://img.shields.io/badge/python-3.9%2B-blue)](https://www.python.org/downloads/)
@@ -49,7 +49,10 @@ Python package for scraping and analyzing NHL data with built-in Expected Goals 
 pip install scrapernhl
 ```
 
-> **Note:** Version 0.1.5 includes critical bug fixes for multi-league team scrapers and goalie statistics. See [CHANGELOG.md](CHANGELOG.md) for details.
+> **Note:** Version 0.1.5 adds support for **5 new hockey leagues** (PWHL, AHL, OHL, WHL, QMJHL)! 
+> Previously NHL-only, ScraperNHL now provides comprehensive scraping for 6 total leagues.
+> Includes bug fixes for teams scrapers, goalie stats, and career stats parsing.
+> See [CHANGELOG.md](CHANGELOG.md) for details.
 
 ### From GitHub (Latest)
 
@@ -134,18 +137,24 @@ from scrapernhl.qmjhl import api as qmjql
 
 ### Command-Line Interface
 
+Multi-league CLI support for all 6 leagues:
+
 ```bash
-# Scrape teams
+# NHL commands
 scrapernhl teams --output teams.csv
-
-# Scrape schedule
 scrapernhl schedule MTL 20252026 --format json
+scrapernhl game 2024020001 --with-xg
 
-# Scrape play-by-play with xG
-scrapernhl game 2024020001 --with-xg --output game.csv
+# Multi-league commands
+scrapernhl pwhl teams
+scrapernhl ahl standings --season 2024
+scrapernhl ohl stats --player-type goalie
+scrapernhl whl game 12345
+scrapernhl qmjql roster --team-id 7
 
 # Get help
 scrapernhl --help
+scrapernhl pwhl --help
 ```
 
 ## Documentation
@@ -233,4 +242,4 @@ Built for the hockey analytics community.
 
 ---
 
-**Last Updated:** January 11, 2026 | **Version:** 0.1.5 (dev)
+**Last Updated:** January 11, 2026 | **Version:** 0.1.5

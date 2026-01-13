@@ -1,143 +1,206 @@
 ---
-title: "Version 0.1.4 Released"
-date: 2026-02-01
-tags: ["announcement", "release"]
+title: "Version 0.1.5 Released - Multi-League Support!"
+date: 2026-01-11
+tags: ["announcement", "release", "multi-league"]
 categories: ["announcements"]
 draft: false
 ---
 
 # ANNOUNCEMENT: Version 0.1.5 Released
-*Date: February 1st, 2026*
+*Date: January 11th, 2026*
 
 Hello, fellow hockey analytics enthusiasts!
-I am thrilled to announce the release of version 0.1.5 of the scraper package!
 
-If in the latest update (v0.1.4), we focused on usability (modularization, documentation, CLI), this time the emphasis has been on both **enhancing the core functionality** and **expanding multi-league support** to 5 professional hockey leagues!
+Version 0.1.5 is now available with **major new features**: comprehensive support for **5 professional hockey leagues**! Previously, ScraperNHL only supported NHL data. Now you can scrape data from:
 
-## 🎉 Major New Features
-
-### Multi-League API Support (NEW!)
-The biggest addition to v0.1.5 is comprehensive API support for **5 hockey leagues**:
-- **PWHL** (Professional Women's Hockey League)
+- **PWHL** (Professional Women's Hockey League) - Shoutout to women's hockey! *where I got my first pro hockey experience 😉*
 - **AHL** (American Hockey League)
 - **OHL** (Ontario Hockey League)
 - **WHL** (Western Hockey League)
 - **QMJHL** (Quebec Maritimes Junior Hockey League)
 
-**Key Features:**
-- **75 Total Endpoints**: 15 functions × 5 leagues
-- **Unified API**: Same function names across all leagues
-- **Complete Coverage**: Teams, players, stats, games, schedules, standings, rosters
-- **Full Documentation**: Quick reference, comprehensive examples, interactive notebooks
-- **100% Test Coverage**: All leagues verified and working
+This release includes complete scraper coverage, robust test suites, and bug fixes to ensure reliable data collection across all leagues.
 
-**Example Usage:**
+Thanks to Louis Boulet for telling me about the massive bug in strength label calculations that prompted this fix! Also thanks to Claude Code (I am not sponsored by Anthropic yet unfornunately) for the multiplle rounds of review and and debugging help. 
+
+Of course, there are still more improvements to be made. Make sure you follow the project on GitHub and check out the [full changelog](https://github.com/maxtixador/scrapernhl/blob/master/CHANGELOG.md) for details. You can also follow me on Twitter [@maxtixador](https://twitter.com/maxtixador) or on Bluesky [@HabsBrain.com](https://bsky.app/profile/habsbrain.com) for updates.
+
+
+## Major New Features
+
+### Multi-League Scraper Support
+
+ScraperNHL now supports **5 additional hockey leagues** beyond NHL:
+
 ```python
-# Works identically for all 5 leagues!
+# Each league has complete scraper coverage
+from scrapernhl.pwhl.scrapers import scrapeSchedule, scrapeTeams, scrapeStandings
+from scrapernhl.ahl.scrapers import scrapeSkaterStats, scrapeGoalieStats
+from scrapernhl.ohl.scrapers import scrapeGame, scrapeRoster
+
+# Unified API across all leagues
+pwhl_schedule = scrapeSchedule(season=2024)
+ahl_teams = scrapeTeams()
+ohl_games = scrapeGame(game_id=12345, nhlify=True)
+```
+
+**Available Functions (All 5 Leagues):**
+- `scrapeSchedule()` - Game schedules with scores and status
+- `scrapeTeams()` - Team information and rosters
+- `scrapeStandings()` - League standings
+- `scrapeSkaterStats()` - Player statistics (skaters)
+- `scrapeGoalieStats()` - Goalie statistics
+- `scrapeGame()` - Play-by-play data with optional "nhlify" cleaning
+- `scrapeRoster()` - Team rosters
+- Plus career stats, player profiles, and more!
+
+**Features:**
+- **Unified Interface**: Same function signatures across all leagues
+- **DataFrame Output**: Returns pandas/polars DataFrames
+- **Built-in Caching**: TTL-based caching for performance
+- **Rate Limiting**: Automatic 2 req/sec enforcement
+- **Progress Bars**: Visual feedback for long operations
+- **Error Handling**: Robust error recovery
+
+### Complete Documentation
+
+- [Multi-League Scraper Reference](../multi-league-scraper-reference.md) - Complete API documentation
+- [Jupyter Notebooks](../../notebooks/) - Interactive examples for each league (notebooks 05-09)
+- [API Quick Reference](../api-quick-reference.md) - Fast function lookup
+
+## Critical Bug Fixes
+
+### Strength Label Perspective
+
+Fixed an issue where strength states were computed from a single (alphabetical) team’s perspective and incorrectly applied to both teams, causing PK situations to be mislabeled as PP for the opponent.
+
+- `strength_label()` helpers now accept a team parameter to ensure correct perspective
+- All affected call sites now pass team context when computing TOI and attributing stats
+
+**Result:** Strength labels are now correct and team-relative (e.g., OTT 5v4, WPG 4v5).
+
+## New Test Coverage
+
+Version 0.1.5 includes a comprehensive test suite to ensure data quality across all leagues:
+
+### Multi-League Scraper Tests
+- Complete test coverage for AHL, PWHL, OHL, WHL, and QMJHL scrapers
+- Tests for schedule, teams, standings, player stats, and rosters
+- Ensures all scrapers return valid DataFrames with expected columns
+
+### Career Stats Tests
+- Validates career statistics parsing across all HockeyTech leagues
+- Ensures proper handling of nested JSON structures
+- Tests for both skaters and goalies
+
+### Goalie Stats Validation
+- Comprehensive goalie statistics tests for all leagues
+- Validates correct API parameter usage
+- Ensures accurate stat retrieval
+
+### Notebook Function Tests
+- Tests all scrape functions used in notebooks 05-09
+- Ensures DataFrame output is correctly formatted
+- Validates data consistency across examples
+
+## Updated Documentation
+
+- **Notebooks 05-09** updated to use improved DataFrame-based scraper functions
+- All examples now work correctly with the bug fixes
+- Improved inline documentation for multi-league functions
+
+## Backward Compatibility
+
+All existing code continues to work without changes. This release only fixes bugs and improves data quality—**no breaking changes** to the API.
+
+## Getting Started
+
+Install or update to version 0.1.5:
+
+```bash
+pip install --upgrade scrapernhl
+```
+
+Or install from GitHub for the latest:
+
+```bash
+pip install git+https://github.com/maxtixador/scrapernhl.git
+```
+
+### Multi-League Scraping Example
+
+```python
+# NHL (existing functionality)
+from scrapernhl import scrapeGame
+nhl_game = scrapeGame(2024020001)
+
+# NEW: PWHL support
+from scrapernhl.pwhl.scrapers import scrapeSchedule, scrapeSkaterStats
+pwhl_schedule = scrapeSchedule(season=2024)
+pwhl_stats = scrapeSkaterStats(season=2024, team_id=-1)
+
+# NEW: AHL support  
+from scrapernhl.ahl.scrapers import scrapeTeams, scrapeGoalieStats
+ahl_teams = scrapeTeams()
+ahl_goalies = scrapeGoalieStats(season=2024)
+
+# NEW: OHL, WHL, QMJHL support
+from scrapernhl.ohl.scrapers import scrapeGame
+from scrapernhl.whl.scrapers import scrapeStandings
+from scrapernhl.qmjhl.scrapers import scrapeRoster
+
+ohl_game = scrapeGame(12345, nhlify=True)
+whl_standings = scrapeStandings()
+qmjhl_roster = scrapeRoster(season=2024, team_id=5)
+```
+
+### Multi-League API
+
+All leagues also support a unified API interface:
+
+```python
 from scrapernhl.pwhl import api as pwhl
 from scrapernhl.ahl import api as ahl
-from scrapernhl.ohl import api as ohl
 
 # Get teams
 teams = pwhl.get_teams()
+
+# Get player stats
 stats = ahl.get_skater_stats(limit=50)
-standings = ohl.get_standings()
-```
-
-**Available Functions (All Leagues):**
-1. `get_teams()` - All teams
-2. `get_scorebar()` - Live games & schedule
-3. `get_standings()` - League standings
-4. `get_skater_stats()` - Skater statistics
-5. `get_goalie_stats()` - Goalie statistics
-6. `get_player_profile()` - Player details
-7. `get_all_players()` - All players (skaters + goalies)
-8. `get_schedule()` - Full season schedule
-9. `get_team_schedule()` - Team-specific schedule
-10. `get_game_preview()` - Game preview data
-11. `get_game_summary()` - Game summary/box score
-12. `get_play_by_play()` - Play-by-play data
-13. `get_game_full_data()` - Complete game data
-14. `get_roster()` - Team roster
-15. `get_bootstrap()` - League configuration
-
-**Documentation:**
-- [Quick Reference](../api-quick-reference.md) - Fast function lookup
-- [Complete Examples](../multi-league-api-examples.md) - Comprehensive guide
-- [Interactive Notebook](../../notebooks/multi_league_api_examples.ipynb) - Jupyter examples
-- [Test Suite](../../test_multi_league_api.py) - Reference implementations
-
-## 🐛 Critical Bug Fixes
-
-### NHL Aggregation Functions - Major Fix
-Fixed a **critical bug** in NHL aggregation functions that was causing incorrect calculations in:
-- `toi_by_strength()` - Time on ice aggregations
-- `combo_on_ice_stats()` - Combined on-ice statistics
-- Zone-based aggregations
-- Score-state calculations
-
-**Impact:** This bug could have affected advanced analytics calculations. All aggregation functions now produce accurate results and have been validated with test cases.
-
-## 🔧 Core Improvements
-
-Summary of other improvements in this release:
-1. **Migrate legacy code** → Better maintenance and organization
-2. **Add player stats scraper** → Complete feature set for NHL
-3. **Improve caching** → Better performance and reliability
-4. **Add batch scraping** → User convenience for bulk operations
-5. **Add validation** → Data reliability and error detection
-6. **Standardize errors** → Better debugging and error messages
-7. **Rich integration** → Enhanced developer experience with formatted output
-8. **Enhance logging** → Easier issue tracking and debugging
-9. **Visualization functions** → Quick insights from data
-10. **Aggregation functions** → Simplified analysis (now with bug fixes!)
-
-## 📊 League Data Coverage
-
-With v0.1.5, you now have access to:
-- **NHL**: Full play-by-play, advanced analytics, xG models
-- **PWHL**: Complete API (9 teams)
-- **AHL**: Complete API (24+ teams)
-- **OHL**: Complete API (20+ teams)
-- **WHL**: Complete API (22+ teams)
-- **QMJHL**: Complete API (18+ teams)
-
-## 🚀 Getting Started with Multi-League APIs
-
-```python
-# Install/upgrade
-pip install --upgrade scrapernhl
-
-# Basic usage - works for all leagues!
-from scrapernhl.pwhl import api
-
-# Get teams
-teams = api.get_teams()
-
-# Get player stats with pagination
-stats = api.get_skater_stats(limit=100, first=0)
-
-# Get live games
-games = api.get_scorebar(days_ahead=7)
 
 # Get standings
-standings = api.get_standings(group_by='division')
+standings = pwhl.get_standings(group_by='division')
 ```
 
-## 📚 Resources
+## What's Next?
 
-- **Quick Start**: [Multi-League API Quick Reference](../api-quick-reference.md)
-- **Full Guide**: [Multi-League API Examples](../multi-league-api-examples.md)
-- **Interactive**: [Jupyter Notebook](../../notebooks/multi_league_api_examples.ipynb)
-- **Tests**: [test_multi_league_api.py](../../test_multi_league_api.py)
+With multi-league support established in v0.1.5, version 0.1.6 will focus on:
+- Enhanced analytics functions for multi-league data
+- Cross-league comparison tools
+- Performance improvements for large datasets
+- Additional interactive notebooks and examples
+- More comprehensive documentation
 
-## 🙏 Thank You
+## Resources
 
-Thank you to everyone who uses ScraperNHL! This release represents a significant expansion of the package's capabilities. We now support 6 hockey leagues (NHL + 5 HockeyTech leagues) with a unified, consistent API.
+- **Documentation**: [maxtixador.github.io/scrapernhl](https://maxtixador.github.io/scrapernhl/)
+- **API Reference**: [Multi-League API](../api-quick-reference.md)
+- **Examples**: [Jupyter Notebooks](../../notebooks/)
+- **Changelog**: [CHANGELOG.md](https://github.com/maxtixador/scrapernhl/blob/master/CHANGELOG.md)
 
-As always, feedback and contributions are welcome. If you encounter any issues or have suggestions, please open an issue on GitHub.
+## Thank You
 
-Happy scraping! 🏒
+Thank you to everyone who uses ScraperNHL! This release represents a **major expansion** of the package's capabilities—from a single-league NHL scraper to a comprehensive multi-league platform covering 6 hockey leagues.
+
+With this release, you can now:
+- Analyze women's professional hockey (PWHL)
+- Track prospects across CHL leagues (OHL, WHL, QMJHL)
+- Follow AHL development players
+- Compare data across multiple leagues
+
+If you encounter any issues or have suggestions, please open an issue on [GitHub](https://github.com/maxtixador/scrapernhl/issues).
+
+Happy scraping!
 
 ---
 

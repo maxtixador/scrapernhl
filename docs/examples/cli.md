@@ -1,6 +1,17 @@
 # Command-Line Interface (CLI) Examples
 
-The ScraperNHL CLI allows you to scrape NHL data directly from the command line without writing any Python code. This is perfect for quick data exports, shell scripts, cron jobs, and automated workflows.
+The ScraperNHL CLI allows you to scrape multi-league hockey data directly from the command line without writing any Python code. This is perfect for quick data exports, shell scripts, cron jobs, and automated workflows.
+
+## Supported Leagues
+
+ScraperNHL CLI supports 6 hockey leagues:
+
+- **NHL** - National Hockey League
+- **PWHL** - Professional Women's Hockey League
+- **AHL** - American Hockey League
+- **OHL** - Ontario Hockey League
+- **WHL** - Western Hockey League
+- **QMJHL** - Quebec Maritimes Junior Hockey League
 
 ## Getting Started
 
@@ -14,23 +25,28 @@ Output:
 ```
 Usage: cli.py [OPTIONS] COMMAND [ARGS]...
 
-  ScraperNHL - Command-line interface for NHL data scraping.
-
-  Scrape NHL teams, schedules, standings, rosters, stats, games, and draft
-  data directly from the command line.
+  ScraperNHL - Command-line interface for multi-league hockey data scraping.
+  
+  Scrape NHL, PWHL, AHL, OHL, WHL, and QMJHL data including teams, schedules, 
+  standings, rosters, stats, and games directly from the command line.
 
 Options:
   --version  Show the version and exit.
   --help     Show this message and exit.
 
 Commands:
+  ahl        AHL (American Hockey League) commands.
   draft      Scrape NHL draft data.
   game       Scrape play-by-play data for a specific game.
+  ohl        OHL (Ontario Hockey League) commands.
+  pwhl       PWHL (Professional Women's Hockey League) commands.
+  qmjhl      QMJHL (Quebec Maritimes Junior Hockey League) commands.
   roster     Scrape team roster.
   schedule   Scrape team schedule.
   standings  Scrape NHL standings.
   stats      Scrape team player statistics.
   teams      Scrape all NHL teams.
+  whl        WHL (Western Hockey League) commands.
 ```
 
 ## Output Formats
@@ -425,9 +441,208 @@ print(schedule[schedule['gameState'] == 'OFF'].head())
 "
 ```
 
+## Multi-League Commands
+
+All leagues (PWHL, AHL, OHL, WHL, QMJHL) support the same set of commands with consistent options.
+
+### League Command Groups
+
+Each league has its own command group:
+
+```bash
+python scrapernhl/cli.py pwhl --help
+python scrapernhl/cli.py ahl --help
+python scrapernhl/cli.py ohl --help
+python scrapernhl/cli.py whl --help
+python scrapernhl/cli.py qmjhl --help
+```
+
+### Available Subcommands
+
+Each league supports these subcommands:
+
+- `teams` - Scrape all teams
+- `schedule` - Scrape league schedule
+- `standings` - Scrape league standings
+- `roster` - Scrape team rosters
+- `stats` - Scrape player statistics
+- `game` - Scrape game play-by-play data
+
+### PWHL Examples
+
+```bash
+# Get all PWHL teams
+python scrapernhl/cli.py pwhl teams
+
+# Get schedule for specific season
+python scrapernhl/cli.py pwhl schedule --season 2024
+
+# Get current standings
+python scrapernhl/cli.py pwhl standings
+
+# Get roster for all teams
+python scrapernhl/cli.py pwhl roster
+
+# Get roster for specific team
+python scrapernhl/cli.py pwhl roster --team-id 1
+
+# Get top 50 skater stats
+python scrapernhl/cli.py pwhl stats
+
+# Get goalie stats
+python scrapernhl/cli.py pwhl stats --player-type goalie --limit 20
+
+# Get game play-by-play
+python scrapernhl/cli.py pwhl game 12345
+
+# Export in different formats
+python scrapernhl/cli.py pwhl teams --format json --output pwhl_teams.json
+```
+
+### AHL Examples
+
+```bash
+# Get all AHL teams
+python scrapernhl/cli.py ahl teams
+
+# Get full league schedule
+python scrapernhl/cli.py ahl schedule
+
+# Get schedule for specific team
+python scrapernhl/cli.py ahl schedule --team-id 123
+
+# Get standings
+python scrapernhl/cli.py ahl standings --season 2024
+
+# Get rosters
+python scrapernhl/cli.py ahl roster --team-id 123
+
+# Get player stats
+python scrapernhl/cli.py ahl stats --player-type skater --limit 100
+
+# Scrape game data
+python scrapernhl/cli.py ahl game 54321 --format parquet
+```
+
+### OHL Examples
+
+```bash
+# Get all OHL teams
+python scrapernhl/cli.py ohl teams --season 2024
+
+# Get league schedule
+python scrapernhl/cli.py ohl schedule
+
+# Get standings
+python scrapernhl/cli.py ohl standings
+
+# Get team roster
+python scrapernhl/cli.py ohl roster --team-id 5
+
+# Get top scorers
+python scrapernhl/cli.py ohl stats --limit 50
+
+# Get goalie stats
+python scrapernhl/cli.py ohl stats --player-type goalie
+
+# Game play-by-play
+python scrapernhl/cli.py ohl game 98765
+```
+
+### WHL Examples
+
+```bash
+# Get WHL teams
+python scrapernhl/cli.py whl teams
+
+# Get schedule
+python scrapernhl/cli.py whl schedule --season 2024
+
+# Get standings
+python scrapernhl/cli.py whl standings --output whl_standings.csv
+
+# Get rosters
+python scrapernhl/cli.py whl roster --team-id 10
+
+# Player stats
+python scrapernhl/cli.py whl stats --player-type skater
+
+# Game data
+python scrapernhl/cli.py whl game 11111 --format json
+```
+
+### QMJHL Examples
+
+```bash
+# Get QMJHL teams
+python scrapernhl/cli.py qmjhl teams
+
+# Get full schedule
+python scrapernhl/cli.py qmjhl schedule
+
+# Get standings
+python scrapernhl/cli.py qmjhl standings
+
+# Get team roster
+python scrapernhl/cli.py qmjhl roster --team-id 7
+
+# Get player stats
+python scrapernhl/cli.py qmjhl stats --limit 75
+
+# Get game data
+python scrapernhl/cli.py qmjhl game 22222
+```
+
+### Multi-League Workflow Example
+
+Scrape data from all leagues:
+
+```bash
+#!/bin/bash
+# scrape_all_leagues.sh
+
+# NHL
+python scrapernhl/cli.py teams --output data/nhl_teams.csv
+python scrapernhl/cli.py standings --output data/nhl_standings.csv
+
+# PWHL
+python scrapernhl/cli.py pwhl teams --output data/pwhl_teams.csv
+python scrapernhl/cli.py pwhl standings --output data/pwhl_standings.csv
+
+# AHL
+python scrapernhl/cli.py ahl teams --output data/ahl_teams.csv
+python scrapernhl/cli.py ahl standings --output data/ahl_standings.csv
+
+# OHL
+python scrapernhl/cli.py ohl teams --output data/ohl_teams.csv
+python scrapernhl/cli.py ohl standings --output data/ohl_standings.csv
+
+# WHL
+python scrapernhl/cli.py whl teams --output data/whl_teams.csv
+python scrapernhl/cli.py whl standings --output data/whl_standings.csv
+
+# QMJHL
+python scrapernhl/cli.py qmjhl teams --output data/qmjhl_teams.csv
+python scrapernhl/cli.py qmjql standings --output data/qmjhl_standings.csv
+
+echo "All league data exported!"
+```
+
+## Common Options
+
+All multi-league commands support these options:
+
+- `--season` - Season ID (optional, uses current season if omitted)
+- `--team-id` - Team ID (-1 for all teams, default)
+- `--player-type` - Player type for stats (skater/goalie)
+- `--limit` - Number of records to return (default: 50)
+- `--output` - Custom output file path
+- `--format` - Output format (csv/json/parquet/excel)
+
 ## See Also
 
 - [Basic Scraping Examples](scraping.md) - Python API examples
 - [Advanced Examples](advanced.md) - Data analysis
 - [Data Export](export.md) - Exporting from Python
 - [API Reference](../api.md) - Complete API documentation
+- [Multi-League API Examples](../multi-league-api-examples.md) - Python multi-league usage

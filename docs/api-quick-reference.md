@@ -13,7 +13,7 @@ All functions work identically across all leagues!
 
 ---
 
-## 📊 Core Functions
+## Core Functions
 
 ### 1. `get_teams(season_id=None)`
 Returns all teams in the league.
@@ -45,7 +45,7 @@ standings = api.get_standings(group_by='conference', context='home')
 
 ---
 
-## 👤 Player Stats
+## Player Stats
 
 ### 4. `get_skater_stats(...)`
 Skater statistics with filtering and pagination.
@@ -98,7 +98,7 @@ all_players = api.get_all_players()
 
 ---
 
-## 🏒 Game Functions
+## Game Functions
 
 ### 8. `get_schedule(team_id=-1, month=-1, location=None)`
 Full season schedule.
@@ -155,7 +155,7 @@ game_data = api.get_game_full_data(game_id=12345)
 
 ---
 
-## 🏆 Team Functions
+## Team Functions
 
 ### 14. `get_roster(team_id, roster_status='undefined')`
 Team roster with player details.
@@ -170,7 +170,7 @@ roster = api.get_roster(team_id=2, roster_status='active')
 
 ---
 
-## ⚙️ Configuration
+## Configuration
 
 ### 15. `get_bootstrap(game_id=None, page_name='scorebar')`
 League configuration and metadata.
@@ -185,7 +185,7 @@ config = api.get_bootstrap(game_id=12345, page_name='gamecenter')
 
 ---
 
-## 🔄 Common Patterns
+## Common Patterns
 
 ### Pattern 1: Team Dashboard
 
@@ -255,7 +255,7 @@ for name, api_module in leagues:
 
 ---
 
-## 📋 Parameter Quick Reference
+## Parameter Quick Reference
 
 ### Common to Most Functions
 - `season_id`: Season identifier (e.g., `'2024-25'`), usually optional
@@ -283,7 +283,7 @@ for name, api_module in leagues:
 
 ---
 
-## 🎯 Response Formats
+## Response Formats
 
 Most functions return dictionaries with league data. Common structures:
 
@@ -328,7 +328,7 @@ Most functions return dictionaries with league data. Common structures:
 
 ---
 
-## 💡 Tips
+## Tips
 
 1. **Rate Limiting**: API automatically limits to ~2 requests/second
 2. **Pagination**: Use `first` and `limit` for large datasets
@@ -339,7 +339,7 @@ Most functions return dictionaries with league data. Common structures:
 
 ---
 
-## 📚 Full Documentation
+## Full Documentation
 
 - Complete guide: [Multi-League API Examples](multi-league-api-examples.md)
 - Framework details: [MULTI_LEAGUE_API_FRAMEWORK.md](../MULTI_LEAGUE_API_FRAMEWORK.md)
@@ -348,7 +348,7 @@ Most functions return dictionaries with league data. Common structures:
 
 ---
 
-## 🚀 Getting Started
+## Getting Started
 
 1. Import the league you want:
    ```python
@@ -368,4 +368,4 @@ Most functions return dictionaries with league data. Common structures:
    games = api.get_scorebar()
    ```
 
-That's it! Same API for all 5 leagues. 🎉
+That's it! Same API for all 5 leagues.

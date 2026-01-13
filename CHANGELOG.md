@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.5] - 2026-01-11
+
 ### Fixed
 - Fixed WHL and OHL teams scrapers to use bootstrap data instead of broken `teamsForSeason` API endpoint
 - Fixed OHL career stats function to handle empty DataFrames correctly
@@ -96,7 +98,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Basic player stats
 - Python API and CLI interface
 
-[Unreleased]: https://github.com/maxtixador/scrapernhl/compare/v0.1.5...HEAD
 [Unreleased]: https://github.com/maxtixador/scrapernhl/compare/v0.1.5...HEAD
 [0.1.5]: https://github.com/maxtixador/scrapernhl/compare/v0.1.4...v0.1.5
 [0.1.4]: https://github.com/maxtixador/scrapernhl/compare/v0.1.3...v0.1.4

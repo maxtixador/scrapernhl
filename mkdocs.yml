@@ -16,7 +16,9 @@ nav:
       - Data Export: examples/export.md
   - About: about.md
   - Announcements:
+      - Version 0.1.5 : announcements/version-015.md
       - Version 0.1.4: announcements/version-014.md
+      
 
 theme:
   name: material

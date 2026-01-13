@@ -14,13 +14,13 @@ from pathlib import Path
 
 
 @click.group()
-@click.version_option(version="0.1.4", prog_name="scrapernhl")
+@click.version_option(version="0.1.5", prog_name="scrapernhl")
 def cli():
     """
-    ScraperNHL - Command-line interface for NHL data scraping.
+    ScraperNHL - Command-line interface for multi-league hockey data scraping.
     
-    Scrape NHL teams, schedules, standings, rosters, stats, games, and draft data
-    directly from the command line.
+    Scrape NHL, PWHL, AHL, OHL, WHL, and QMJHL data including teams, schedules, 
+    standings, rosters, stats, and games directly from the command line.
     """
     pass
 
@@ -32,7 +32,7 @@ def cli():
 @click.option('--polars', is_flag=True, help='Use Polars instead of Pandas')
 def teams(output, format, polars):
     """Scrape all NHL teams."""
-    from scrapernhl.scrapers.teams import scrapeTeams
+    from scrapernhl.nhl.scrapers.teams import scrapeTeams
     
     output_format = "polars" if polars else "pandas"
     click.echo("Scraping NHL teams...")
@@ -46,11 +46,11 @@ def teams(output, format, polars):
             output_path = Path(f"nhl_teams.{format}")
         
         _save_dataframe(teams_df, output_path, format, polars)
-        click.echo(f"✅ Successfully scraped {len(teams_df)} teams")
-        click.echo(f"📁 Saved to: {output_path}")
+        click.echo(f"Successfully scraped {len(teams_df)} teams")
+        click.echo(f"Saved to: {output_path}")
         
     except Exception as e:
-        click.echo(f"❌ Error: {e}", err=True)
+        click.echo(f"Error: {e}", err=True)
         sys.exit(1)
 
 
@@ -67,7 +67,7 @@ def schedule(team, season, output, format):
     TEAM: Team abbreviation (e.g., MTL, TOR, BOS)
     SEASON: Season string (e.g., 20252026)
     """
-    from scrapernhl.scrapers.schedule import scrapeSchedule
+    from scrapernhl.nhl.scrapers.schedule import scrapeSchedule
     
     click.echo(f"Scraping {team} schedule for {season}...")
     
@@ -80,11 +80,11 @@ def schedule(team, season, output, format):
             output_path = Path(f"{team.lower()}_schedule_{season}.{format}")
         
         _save_dataframe(schedule_df, output_path, format)
-        click.echo(f"✅ Successfully scraped {len(schedule_df)} games")
-        click.echo(f"📁 Saved to: {output_path}")
+        click.echo(f"Successfully scraped {len(schedule_df)} games")
+        click.echo(f"Saved to: {output_path}")
         
     except Exception as e:
-        click.echo(f"❌ Error: {e}", err=True)
+        click.echo(f"Error: {e}", err=True)
         sys.exit(1)
 
 
@@ -99,7 +99,7 @@ def standings(date, output, format):
     
     DATE: Date in YYYY-MM-DD format (default: today)
     """
-    from scrapernhl.scrapers.standings import scrapeStandings
+    from scrapernhl.nhl.scrapers.standings import scrapeStandings
     
     if not date:
         date = datetime.now().strftime("%Y-%m-%d")
@@ -115,11 +115,11 @@ def standings(date, output, format):
             output_path = Path(f"nhl_standings_{date}.{format}")
         
         _save_dataframe(standings_df, output_path, format)
-        click.echo(f"✅ Successfully scraped standings for {len(standings_df)} teams")
-        click.echo(f"📁 Saved to: {output_path}")
+        click.echo(f"Successfully scraped standings for {len(standings_df)} teams")
+        click.echo(f"Saved to: {output_path}")
         
     except Exception as e:
-        click.echo(f"❌ Error: {e}", err=True)
+        click.echo(f"Error: {e}", err=True)
         sys.exit(1)
 
 
@@ -136,7 +136,7 @@ def roster(team, season, output, format):
     TEAM: Team abbreviation (e.g., MTL, TOR, BOS)
     SEASON: Season string (e.g., 20252026)
     """
-    from scrapernhl.scrapers.roster import scrapeRoster
+    from scrapernhl.nhl.scrapers.roster import scrapeRoster
     
     click.echo(f"Scraping {team} roster for {season}...")
     
@@ -149,11 +149,11 @@ def roster(team, season, output, format):
             output_path = Path(f"{team.lower()}_roster_{season}.{format}")
         
         _save_dataframe(roster_df, output_path, format)
-        click.echo(f"✅ Successfully scraped {len(roster_df)} players")
-        click.echo(f"📁 Saved to: {output_path}")
+        click.echo(f"Successfully scraped {len(roster_df)} players")
+        click.echo(f"Saved to: {output_path}")
         
     except Exception as e:
-        click.echo(f"❌ Error: {e}", err=True)
+        click.echo(f"Error: {e}", err=True)
         sys.exit(1)
 
 
@@ -172,7 +172,7 @@ def stats(team, season, goalies, session, output, format):
     TEAM: Team abbreviation (e.g., MTL, TOR, BOS)
     SEASON: Season string (e.g., 20252026)
     """
-    from scrapernhl.scrapers.stats import scrapeTeamStats
+    from scrapernhl.nhl.scrapers.stats import scrapeTeamStats
     
     player_type = "goalies" if goalies else "skaters"
     click.echo(f"Scraping {team} {player_type} stats for {season}...")
@@ -186,11 +186,11 @@ def stats(team, season, goalies, session, output, format):
             output_path = Path(f"{team.lower()}_{player_type}_{season}.{format}")
         
         _save_dataframe(stats_df, output_path, format)
-        click.echo(f"✅ Successfully scraped stats for {len(stats_df)} {player_type}")
-        click.echo(f"📁 Saved to: {output_path}")
+        click.echo(f"Successfully scraped stats for {len(stats_df)} {player_type}")
+        click.echo(f"Saved to: {output_path}")
         
     except Exception as e:
-        click.echo(f"❌ Error: {e}", err=True)
+        click.echo(f"Error: {e}", err=True)
         sys.exit(1)
 
 
@@ -206,7 +206,7 @@ def game(game_id, output, format, with_xg):
     
     GAME_ID: NHL game ID (e.g., 2024020001)
     """
-    from scrapernhl.scrapers.games import scrapePlays
+    from scrapernhl.nhl.scrapers.games import scrapePlays
     
     click.echo(f"Scraping play-by-play for game {game_id}...")
     
@@ -217,7 +217,7 @@ def game(game_id, output, format, with_xg):
             pbp = game_tuple.data
             pbp = engineer_xg_features(pbp)
             pbp = predict_xg_for_pbp(pbp)
-            click.echo(f"✅ Calculated xG for shot events")
+            click.echo(f"Calculated xG for shot events")
         else:
             pbp = scrapePlays(game_id)
         
@@ -228,11 +228,11 @@ def game(game_id, output, format, with_xg):
             output_path = Path(f"game_{game_id}{suffix}.{format}")
         
         _save_dataframe(pbp, output_path, format)
-        click.echo(f"✅ Successfully scraped {len(pbp)} events")
-        click.echo(f"📁 Saved to: {output_path}")
+        click.echo(f"Successfully scraped {len(pbp)} events")
+        click.echo(f"Saved to: {output_path}")
         
     except Exception as e:
-        click.echo(f"❌ Error: {e}", err=True)
+        click.echo(f"Error: {e}", err=True)
         sys.exit(1)
 
 
@@ -249,7 +249,7 @@ def draft(year, round, output, format):
     YEAR: Draft year (e.g., 2024)
     ROUND: Draft round (1-7 or 'all', default: all)
     """
-    from scrapernhl.scrapers.draft import scrapeDraftData
+    from scrapernhl.nhl.scrapers.draft import scrapeDraftData
     
     round_text = f"round {round}" if round != 'all' else "all rounds"
     click.echo(f"Scraping {year} NHL draft ({round_text})...")
@@ -264,12 +264,225 @@ def draft(year, round, output, format):
             output_path = Path(f"nhl_draft_{year}{round_suffix}.{format}")
         
         _save_dataframe(draft_df, output_path, format)
-        click.echo(f"✅ Successfully scraped {len(draft_df)} draft picks")
-        click.echo(f"📁 Saved to: {output_path}")
+        click.echo(f"Successfully scraped {len(draft_df)} draft picks")
+        click.echo(f"Saved to: {output_path}")
         
     except Exception as e:
-        click.echo(f"❌ Error: {e}", err=True)
+        click.echo(f"Error: {e}", err=True)
         sys.exit(1)
+
+
+# Multi-League Commands
+@cli.group()
+def pwhl():
+    """PWHL (Professional Women's Hockey League) commands."""
+    pass
+
+
+@cli.group()
+def ahl():
+    """AHL (American Hockey League) commands."""
+    pass
+
+
+@cli.group()
+def ohl():
+    """OHL (Ontario Hockey League) commands."""
+    pass
+
+
+@cli.group()
+def whl():
+    """WHL (Western Hockey League) commands."""
+    pass
+
+
+@cli.group()
+def qmjhl():
+    """QMJHL (Quebec Maritimes Junior Hockey League) commands."""
+    pass
+
+
+# Generic multi-league command factory
+def create_league_commands(group, league_name, module_path):
+    """Create standard commands for a league."""
+    
+    @group.command('teams')
+    @click.option('--season', type=int, help='Season ID')
+    @click.option('--output', '-o', help='Output file path')
+    @click.option('--format', '-f', type=click.Choice(['csv', 'json', 'parquet', 'excel']), 
+                  default='csv', help='Output format')
+    def league_teams(season, output, format):
+        f"""Scrape {league_name} teams."""
+        module = __import__(f'scrapernhl.{module_path}.scrapers', fromlist=['scrapeTeams'])
+        
+        click.echo(f"Scraping {league_name} teams...")
+        try:
+            kwargs = {}
+            if season:
+                kwargs['season'] = season
+            teams_df = module.scrapeTeams(**kwargs)
+            
+            if output:
+                output_path = Path(output)
+            else:
+                output_path = Path(f"{league_name.lower()}_teams.{format}")
+            
+            _save_dataframe(teams_df, output_path, format)
+            click.echo(f"Successfully scraped {len(teams_df)} teams")
+            click.echo(f"Saved to: {output_path}")
+        except Exception as e:
+            click.echo(f"Error: {e}", err=True)
+            sys.exit(1)
+    
+    @group.command('schedule')
+    @click.option('--season', type=int, help='Season ID')
+    @click.option('--team-id', type=int, default=-1, help='Team ID (-1 for all teams)')
+    @click.option('--output', '-o', help='Output file path')
+    @click.option('--format', '-f', type=click.Choice(['csv', 'json', 'parquet', 'excel']), 
+                  default='csv', help='Output format')
+    def league_schedule(season, team_id, output, format):
+        f"""Scrape {league_name} schedule."""
+        module = __import__(f'scrapernhl.{module_path}.scrapers', fromlist=['scrapeSchedule'])
+        
+        click.echo(f"Scraping {league_name} schedule...")
+        try:
+            kwargs = {'team_id': team_id}
+            if season:
+                kwargs['season'] = season
+            schedule_df = module.scrapeSchedule(**kwargs)
+            
+            if output:
+                output_path = Path(output)
+            else:
+                output_path = Path(f"{league_name.lower()}_schedule.{format}")
+            
+            _save_dataframe(schedule_df, output_path, format)
+            click.echo(f"Successfully scraped {len(schedule_df)} games")
+            click.echo(f"Saved to: {output_path}")
+        except Exception as e:
+            click.echo(f"Error: {e}", err=True)
+            sys.exit(1)
+    
+    @group.command('standings')
+    @click.option('--season', type=int, help='Season ID')
+    @click.option('--output', '-o', help='Output file path')
+    @click.option('--format', '-f', type=click.Choice(['csv', 'json', 'parquet', 'excel']), 
+                  default='csv', help='Output format')
+    def league_standings(season, output, format):
+        f"""Scrape {league_name} standings."""
+        module = __import__(f'scrapernhl.{module_path}.scrapers', fromlist=['scrapeStandings'])
+        
+        click.echo(f"Scraping {league_name} standings...")
+        try:
+            kwargs = {}
+            if season:
+                kwargs['season'] = season
+            standings_df = module.scrapeStandings(**kwargs)
+            
+            if output:
+                output_path = Path(output)
+            else:
+                output_path = Path(f"{league_name.lower()}_standings.{format}")
+            
+            _save_dataframe(standings_df, output_path, format)
+            click.echo(f"Successfully scraped standings for {len(standings_df)} teams")
+            click.echo(f"Saved to: {output_path}")
+        except Exception as e:
+            click.echo(f"Error: {e}", err=True)
+            sys.exit(1)
+    
+    @group.command('roster')
+    @click.option('--season', type=int, help='Season ID')
+    @click.option('--team-id', type=int, default=-1, help='Team ID (-1 for all teams)')
+    @click.option('--output', '-o', help='Output file path')
+    @click.option('--format', '-f', type=click.Choice(['csv', 'json', 'parquet', 'excel']), 
+                  default='csv', help='Output format')
+    def league_roster(season, team_id, output, format):
+        f"""Scrape {league_name} roster."""
+        module = __import__(f'scrapernhl.{module_path}.scrapers', fromlist=['scrapeRoster'])
+        
+        click.echo(f"Scraping {league_name} roster...")
+        try:
+            kwargs = {'team_id': team_id}
+            if season:
+                kwargs['season'] = season
+            roster_df = module.scrapeRoster(**kwargs)
+            
+            if output:
+                output_path = Path(output)
+            else:
+                output_path = Path(f"{league_name.lower()}_roster.{format}")
+            
+            _save_dataframe(roster_df, output_path, format)
+            click.echo(f"Successfully scraped {len(roster_df)} players")
+            click.echo(f"Saved to: {output_path}")
+        except Exception as e:
+            click.echo(f"Error: {e}", err=True)
+            sys.exit(1)
+    
+    @group.command('stats')
+    @click.option('--season', type=int, help='Season ID')
+    @click.option('--player-type', type=click.Choice(['skater', 'goalie']), default='skater', help='Player type')
+    @click.option('--limit', type=int, default=50, help='Number of records to return')
+    @click.option('--output', '-o', help='Output file path')
+    @click.option('--format', '-f', type=click.Choice(['csv', 'json', 'parquet', 'excel']), 
+                  default='csv', help='Output format')
+    def league_stats(season, player_type, limit, output, format):
+        f"""Scrape {league_name} player stats."""
+        module = __import__(f'scrapernhl.{module_path}.scrapers', fromlist=['scrapePlayerStats'])
+        
+        click.echo(f"Scraping {league_name} player stats...")
+        try:
+            kwargs = {'player_type': player_type, 'limit': limit}
+            if season:
+                kwargs['season'] = season
+            stats_df = module.scrapePlayerStats(**kwargs)
+            
+            if output:
+                output_path = Path(output)
+            else:
+                output_path = Path(f"{league_name.lower()}_{player_type}_stats.{format}")
+            
+            _save_dataframe(stats_df, output_path, format)
+            click.echo(f"Successfully scraped stats for {len(stats_df)} {player_type}s")
+            click.echo(f"Saved to: {output_path}")
+        except Exception as e:
+            click.echo(f"Error: {e}", err=True)
+            sys.exit(1)
+    
+    @group.command('game')
+    @click.argument('game_id', type=int)
+    @click.option('--output', '-o', help='Output file path')
+    @click.option('--format', '-f', type=click.Choice(['csv', 'json', 'parquet', 'excel']), 
+                  default='csv', help='Output format')
+    def league_game(game_id, output, format):
+        f"""Scrape {league_name} play-by-play data for a game."""
+        module = __import__(f'scrapernhl.{module_path}.scrapers', fromlist=['scrape_game'])
+        
+        click.echo(f"Scraping {league_name} game {game_id}...")
+        try:
+            game_df = module.scrape_game(game_id)
+            
+            if output:
+                output_path = Path(output)
+            else:
+                output_path = Path(f"{league_name.lower()}_game_{game_id}.{format}")
+            
+            _save_dataframe(game_df, output_path, format)
+            click.echo(f"Successfully scraped {len(game_df)} events")
+            click.echo(f"Saved to: {output_path}")
+        except Exception as e:
+            click.echo(f"Error: {e}", err=True)
+            sys.exit(1)
+
+
+# Register league commands
+create_league_commands(pwhl, 'PWHL', 'pwhl')
+create_league_commands(ahl, 'AHL', 'ahl')
+create_league_commands(ohl, 'OHL', 'ohl')
+create_league_commands(whl, 'WHL', 'whl')
+create_league_commands(qmjhl, 'QMJHL', 'qmjhl')
 
 
 def _save_dataframe(df, path: Path, format: str, is_polars: bool = False):

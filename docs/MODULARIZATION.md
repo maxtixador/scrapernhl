@@ -178,7 +178,7 @@ python demo_modular.py
 - Package distribution (PyPI)
 - Comprehensive documentation website
 
-### 🔄 To Be Created (Phase 2)
+### To Be Created (Phase 2)
 - PBP parsing module (`scrapernhl.pbp`)
 - Feature engineering modules (`scrapernhl.features`)
 - Analysis modules (`scrapernhl.analysis`)

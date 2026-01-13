@@ -43,23 +43,26 @@ schedule = scrapeSchedule("MTL", "20252026")
 
 ### Command-Line Interface
 
-All scraping functions are also available via CLI for quick data exports:
+All scraping functions are available via CLI for quick data exports across all 6 supported leagues:
 
 ```bash
 # View available commands
 python scrapernhl/cli.py --help
 
-# Scrape teams
+# NHL commands
 python scrapernhl/cli.py teams --output teams.csv
-
-# Scrape schedule
 python scrapernhl/cli.py schedule MTL 20252026 --format json
-
-# Scrape with different output formats
 python scrapernhl/cli.py standings --format parquet
+
+# Multi-league commands (PWHL, AHL, OHL, WHL, QMJHL)
+python scrapernhl/cli.py pwhl teams
+python scrapernhl/cli.py ahl standings --season 2024
+python scrapernhl/cli.py ohl stats --player-type goalie
+python scrapernhl/cli.py whl game 12345
+python scrapernhl/cli.py qmjhl roster --team-id 7
 ```
 
-See the [CLI Examples](examples/cli.md) page for comprehensive CLI usage.
+See the [CLI Examples](examples/cli.md) page for comprehensive CLI usage including all leagues.
 
 ---
 ### IMPORTANT NOTE ABOUT GAME STRENGTHS

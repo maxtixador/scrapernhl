@@ -1,13 +1,19 @@
 # ScraperNHL Documentation
 
-NHL data scraping package with Expected Goals (xG) model, advanced analytics, and multi-league support architecture.
+[![Documentation](https://img.shields.io/badge/docs-mkdocs-blue)](https://maxtixador.github.io/scrapernhl/)
+[![Python Version](https://img.shields.io/badge/python-3.9%2B-blue)](https://www.python.org/downloads/)
+[![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+
+Hockey (*not only NHL anymore 😀*) data scraping package with Expected Goals (xG) model, advanced analytics, and multi-league support architecture.
 
 ## Overview
 
-ScraperNHL is a Python package designed for scraping and analyzing NHL data. This documentation will guide you through the installation, usage, and features of the package.
+ScraperNHL is a Python package designed for scraping and analyzing hockey data. This documentation will guide you through the installation, usage, and features of the package.
 
 **Python Version:** 3.9+ (tested on 3.9-3.13)  
-**Current Version:** 0.1.4
+**Current Version:** 0.1.5
+
+> **New in 0.1.5:** Multi-league support for **PWHL, AHL, OHL, WHL, QMJHL**! ScraperNHL now supports 6 total hockey leagues with complete scraper coverage.
 
 ## Installation
 
@@ -88,14 +94,15 @@ rosters = game_data.rosters
 - [Player Demo](../notebooks/player_demo.ipynb) - Cross-league player data
 
 ### Examples
-- [CLI Examples](examples/cli.md) - Command-line usage
+- [CLI Examples](examples/cli.md) - Multi-league command-line usage
 - [Python Examples](examples/scraping.md) - Python API usage
 - [Advanced Analytics](examples/advanced.md) - Analytics features
+- [Multi-League API Examples](multi-league-api-examples.md) - Cross-league examples
 
 ### About
 - [About the Project](about.md)
 - [GitHub Repository](https://github.com/maxtixador/scrapernhl)
 - [PyPI Package](https://pypi.org/project/scrapernhl/)
-- [Announcements](announcements/version-014.md) - Latest news and updates
+- [Announcements](announcements/version-015.md) - Latest news and updates
 
 

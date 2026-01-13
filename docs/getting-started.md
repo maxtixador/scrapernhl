@@ -12,6 +12,8 @@ Install the latest stable version:
 pip install scrapernhl
 ```
 
+> **Note:** Version 0.1.5 (latest) includes critical bug fixes for multi-league scrapers. See the [CHANGELOG](https://github.com/maxtixador/scrapernhl/blob/master/CHANGELOG.md) for details.
+
 Or with uv:
 
 ```bash
@@ -116,16 +118,42 @@ See [API Reference](api.md) for all available functions.
 
 ## Project Structure
 
-ScraperNHL is organized to support multiple leagues:
+ScraperNHL v0.1.5 supports 6 hockey leagues with a modular structure:
 
 ```
 scrapernhl/
 ├── core/          # Shared utilities (all leagues)
-├── nhl/           # NHL-specific scrapers and analytics
-├── ohl/           # OHL support (future)
-├── whl/           # WHL support (future)
-└── ...
+├── nhl/           # NHL scrapers and analytics
+├── pwhl/          # PWHL support
+├── ahl/           # AHL support
+├── ohl/           # OHL support
+├── whl/           # WHL support
+├── qmjhl/         # QMJHL support
+└── cli.py         # Multi-league CLI
 ```
+
+### Multi-League Support (New in v0.1.5)
+
+Each league has its own module with consistent API:
+
+```python
+# PWHL
+from scrapernhl.pwhl.scrapers import scrapeTeams, scrapeSchedule, scrapeStandings
+
+# AHL
+from scrapernhl.ahl.scrapers import scrapeTeams, scrapeRoster
+
+# OHL
+from scrapernhl.ohl.scrapers import scrapeTeams, scrapePlayerStats
+
+# WHL
+from scrapernhl.whl.scrapers import scrapeTeams, scrape_game
+
+# QMJHL
+from scrapernhl.qmjql.scrapers import scrapeTeams, scrapeStandings
+```
+
+### Backward Compatibility
 
 For backward compatibility, all NHL functions are re-exported at the package level:
 
@@ -135,7 +163,7 @@ from scrapernhl import scrapeTeams
 from scrapernhl.nhl.scrapers.teams import scrapeTeams
 ```
 
-See the [Multi-League Reorganization Guide](https://github.com/maxtixador/scrapernhl/blob/master/MULTI_LEAGUE_REORG.md) for details.
+See the [Multi-League API Examples](multi-league-api-examples.md) and [Multi-League Scraper Reference](multi-league-scraper-reference.md) for comprehensive documentation.
 
 ## Requirements
 
