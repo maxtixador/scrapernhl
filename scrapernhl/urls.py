@@ -274,14 +274,14 @@ def build_player_page_url(config: LeagueConfig, player_id: int, season: int, sta
     - season: Season ID (e.g. 90 for AHL)
     - stats_type: 'standard' (default) or 'bio' (bio only)
     """
-    params = f"?feed=statviewfeed&view=player"
+    params = "?feed=statviewfeed&view=player"
     params += f"&key={config.api_key}"
     params += f"&client_code={config.client_code}"
     params += f"&league_id={config.league_id}"
     params += f"&player_id={player_id}"
     params += f"&season_id={season}"
     params += f"&site_id={config.site_id}"
-    params += f"&lang=en"
+    params += "&lang=en"
     if stats_type:
         params += f"&statsType={stats_type}"
 

@@ -1,19 +1,18 @@
 """NHL team data scrapers."""
 
 from datetime import datetime
-from typing import Dict, List
 
 import pandas as pd
 import polars as pl
 
-from scrapernhl.core.http import fetch_json
-from scrapernhl.core.utils import json_normalize
-from scrapernhl.core.progress import console
 from scrapernhl.core.cache import cached
+from scrapernhl.core.http import fetch_json
+from scrapernhl.core.progress import console
+from scrapernhl.core.utils import json_normalize
 
 
 @cached(ttl=86400, cache_key_func=lambda source="calendar": f"teams_{source}")
-def getTeamsData(source: str = "calendar") -> List[Dict]:
+def getTeamsData(source: str = "calendar") -> list[dict]:
     """
     Scrapes NHL team data from various public endpoints and enriches it with metadata to dict format.
 
@@ -78,13 +77,13 @@ def scrapeTeams(source: str = "calendar", output_format: str = "pandas") -> pd.D
     - pd.DataFrame or pl.DataFrame: Enriched team data with metadata in the specified format.
     """
     from scrapernhl.core.schema import standardize_columns
-    
+
     raw_data = getTeamsData(source)
     df = json_normalize(raw_data, output_format)
-    
+
     # Standardize column names if pandas format
     if output_format == "pandas" and isinstance(df, pd.DataFrame):
         df = standardize_columns(df, "teams", strict=False, warn_missing=False)
-    
+
     return df
 

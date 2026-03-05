@@ -49,12 +49,15 @@ class TestInstantiation:
         assert s.league == league
         assert s.config is not None
 
+    @pytest.mark.integration
     @pytest.mark.parametrize("league", ["ahl", "qmjhl", "ohl", "whl", "pwhl"])
     def test_bootstrap_data_fetched(self, league):
-        """Non-NHL leagues should auto-fetch bootstrap on init."""
+        """Non-NHL bootstrap data is fetched lazily on first property access."""
         s = HockeyScraper(league)
-        assert s.bootstrap_data is not None
-        assert isinstance(s.bootstrap_data, dict)
+        # Access the property to trigger the lazy fetch
+        data = s._bootstrap
+        assert data is not None
+        assert isinstance(data, dict)
 
     def test_nhl_no_bootstrap_data(self):
         """NHL scraper should not auto-fetch bootstrap."""

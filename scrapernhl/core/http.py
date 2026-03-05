@@ -1,15 +1,21 @@
 """http.py : HTTP utilities for fetching NHL data with retry logic and session management."""
 
 import asyncio
-from typing import Optional
 
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
-from scrapernhl._config import DEFAULT_HEADERS, DEFAULT_TIMEOUT
 from scrapernhl.core.logging_config import get_logger, log_api_request
 from scrapernhl.exceptions import APIError, RateLimitError
+
+DEFAULT_HEADERS = {
+    "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119 Safari/537.36",
+    "Accept": "application/json,text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Accept-Language": "en-US,en;q=0.5",
+    "Connection": "keep-alive",
+}
+DEFAULT_TIMEOUT = 10  # seconds
 
 # Setup logging
 LOG = get_logger(__name__)
@@ -57,41 +63,41 @@ def fetch_json(url: str, timeout: int = DEFAULT_TIMEOUT) -> dict:
     try:
         log_api_request(url, "GET")
         resp = SESSION.get(url, headers=DEFAULT_HEADERS, timeout=timeout)
-        
+
         # Check for rate limiting
         if resp.status_code == 429:
             retry_after = resp.headers.get("Retry-After")
             retry_seconds = int(retry_after) if retry_after else None
             log_api_request(url, "GET", resp.status_code)
             raise RateLimitError(
-                f"Rate limit exceeded for {url}", 
+                f"Rate limit exceeded for {url}",
                 retry_after=retry_seconds
             )
-        
+
         resp.raise_for_status()
         log_api_request(url, "GET", resp.status_code)
         return resp.json()
-        
+
     except RateLimitError:
         raise  # Re-raise rate limit errors
-        
+
     except requests.exceptions.HTTPError as e:
         LOG.error(f"HTTP error fetching {url}: {e}")
         raise APIError(
-            f"HTTP error: {e}", 
+            f"HTTP error: {e}",
             status_code=e.response.status_code if e.response else None
         ) from e
-        
+
     except requests.exceptions.RequestException as e:
         LOG.error(f"Request failed for {url}: {e}")
         raise APIError(f"Request failed: {e}") from e
-        
+
     except Exception as e:
         LOG.error(f"Unexpected error fetching {url}: {e}")
         raise APIError(f"Unexpected error: {e}") from e
 
 
-def fetch_html(url: str, timeout: int = DEFAULT_TIMEOUT) -> Optional[str]:
+def fetch_html(url: str, timeout: int = DEFAULT_TIMEOUT) -> str | None:
     """
     Fetch HTML content from a URL with retry logic.
 
@@ -114,7 +120,7 @@ def fetch_html(url: str, timeout: int = DEFAULT_TIMEOUT) -> Optional[str]:
         return None
 
 
-async def fetch_html_async(url: str, timeout: int = DEFAULT_TIMEOUT) -> Optional[str]:
+async def fetch_html_async(url: str, timeout: int = DEFAULT_TIMEOUT) -> str | None:
     """
     Async wrapper around fetch_html using a background thread.
 

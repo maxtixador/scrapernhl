@@ -5,11 +5,12 @@ Bootstrap data is cached metadata that includes leagues, seasons, teams, etc.
 These helpers make it easy to extract specific data from any league's bootstrap.
 """
 
+from typing import Any
+
 import pandas as pd
-from typing import Union, List, Dict, Any
 
 
-def get_leagues(bootstrap: Dict[str, Any]) -> pd.DataFrame:
+def get_leagues(bootstrap: dict[str, Any]) -> pd.DataFrame:
     """
     Extract leagues information from bootstrap.
 
@@ -28,7 +29,7 @@ def get_leagues(bootstrap: Dict[str, Any]) -> pd.DataFrame:
     return pd.DataFrame()
 
 
-def get_seasons(bootstrap: Dict[str, Any]) -> pd.DataFrame:
+def get_seasons(bootstrap: dict[str, Any]) -> pd.DataFrame:
     """
     Extract seasons information from bootstrap.
 
@@ -47,7 +48,7 @@ def get_seasons(bootstrap: Dict[str, Any]) -> pd.DataFrame:
     return pd.DataFrame()
 
 
-def get_regular_seasons(bootstrap: Dict[str, Any]) -> pd.DataFrame:
+def get_regular_seasons(bootstrap: dict[str, Any]) -> pd.DataFrame:
     """
     Extract regular seasons from bootstrap.
 
@@ -66,7 +67,7 @@ def get_regular_seasons(bootstrap: Dict[str, Any]) -> pd.DataFrame:
     return pd.DataFrame()
 
 
-def get_playoff_seasons(bootstrap: Dict[str, Any]) -> pd.DataFrame:
+def get_playoff_seasons(bootstrap: dict[str, Any]) -> pd.DataFrame:
     """
     Extract playoff seasons from bootstrap.
 
@@ -85,7 +86,7 @@ def get_playoff_seasons(bootstrap: Dict[str, Any]) -> pd.DataFrame:
     return pd.DataFrame()
 
 
-def get_teams(bootstrap: Dict[str, Any]) -> pd.DataFrame:
+def get_teams(bootstrap: dict[str, Any]) -> pd.DataFrame:
     """
     Extract teams from bootstrap (includes 'All Teams').
 
@@ -104,7 +105,7 @@ def get_teams(bootstrap: Dict[str, Any]) -> pd.DataFrame:
     return pd.DataFrame()
 
 
-def get_teams_no_all(bootstrap: Dict[str, Any]) -> pd.DataFrame:
+def get_teams_no_all(bootstrap: dict[str, Any]) -> pd.DataFrame:
     """
     Extract teams from bootstrap (excludes 'All Teams').
 
@@ -123,7 +124,7 @@ def get_teams_no_all(bootstrap: Dict[str, Any]) -> pd.DataFrame:
     return pd.DataFrame()
 
 
-def get_divisions(bootstrap: Dict[str, Any]) -> pd.DataFrame:
+def get_divisions(bootstrap: dict[str, Any]) -> pd.DataFrame:
     """
     Extract divisions from bootstrap.
 
@@ -149,7 +150,7 @@ def get_divisions(bootstrap: Dict[str, Any]) -> pd.DataFrame:
     return pd.DataFrame()
 
 
-def get_conferences(bootstrap: Dict[str, Any]) -> pd.DataFrame:
+def get_conferences(bootstrap: dict[str, Any]) -> pd.DataFrame:
     """
     Extract conferences from bootstrap.
 
@@ -175,7 +176,7 @@ def get_conferences(bootstrap: Dict[str, Any]) -> pd.DataFrame:
     return pd.DataFrame()
 
 
-def get_current_season_id(bootstrap: Dict[str, Any]) -> Union[int, None]:
+def get_current_season_id(bootstrap: dict[str, Any]) -> int | None:
     """
     Get the current season ID from bootstrap.
 
@@ -188,7 +189,7 @@ def get_current_season_id(bootstrap: Dict[str, Any]) -> Union[int, None]:
     return bootstrap.get('current_season_id')
 
 
-def get_current_league_id(bootstrap: Dict[str, Any]) -> Union[int, None]:
+def get_current_league_id(bootstrap: dict[str, Any]) -> int | None:
     """
     Get the current league ID from bootstrap.
 

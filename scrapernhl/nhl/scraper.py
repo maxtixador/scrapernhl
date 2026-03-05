@@ -10,39 +10,39 @@ For new code, prefer importing directly from submodules:
 """
 
 # Re-export scraper functions for backward compatibility
-from scrapernhl.nhl.scrapers.teams import getTeamsData, scrapeTeams
-from scrapernhl.nhl.scrapers.schedule import getScheduleData, scrapeSchedule
-from scrapernhl.nhl.scrapers.standings import getStandingsData, scrapeStandings
-from scrapernhl.nhl.scrapers.roster import getRosterData, scrapeRoster
-from scrapernhl.nhl.scrapers.stats import getTeamStatsData, scrapeTeamStats
+# Legacy default constants (kept for backward compatibility)
+DEFAULT_TEAM = "MTL"
+DEFAULT_SEASON = "20252026"
+DEFAULT_DATE = "2025-11-11"
+
+# Re-export HTTP and utility functions
+from scrapernhl.core.http import DEFAULT_HEADERS, DEFAULT_TIMEOUT, fetch_html, fetch_html_async, fetch_json, fetch_json_async  # noqa: E402
+from scrapernhl.core.utils import (
+    _dedup_cols,
+    _group_merge_index,
+    json_normalize,
+    time_str_to_seconds,
+)
 from scrapernhl.nhl.scrapers.draft import (
     getDraftData,
-    scrapeDraftData,
     getRecordsDraftData,
-    scrapeDraftRecords,
     getRecordsTeamDraftHistoryData,
+    scrapeDraftData,
+    scrapeDraftRecords,
     scrapeTeamDraftHistory,
 )
 from scrapernhl.nhl.scrapers.games import (
-    getGameData,
-    scrapePlays,
-    getGoalReplayData,
     convert_json_to_goal_url,
+    getGameData,
+    getGoalReplayData,
+    scrapePlays,
 )
+from scrapernhl.nhl.scrapers.roster import getRosterData, scrapeRoster
+from scrapernhl.nhl.scrapers.schedule import getScheduleData, scrapeSchedule
+from scrapernhl.nhl.scrapers.standings import getStandingsData, scrapeStandings
+from scrapernhl.nhl.scrapers.stats import getTeamStatsData, scrapeTeamStats
+from scrapernhl.nhl.scrapers.teams import getTeamsData, scrapeTeams
 
-# Re-export HTTP and utility functions
-from scrapernhl.core.http import fetch_json, fetch_html, fetch_html_async, fetch_json_async
-from scrapernhl.core.utils import time_str_to_seconds, json_normalize, _dedup_cols, _group_merge_index
-
-
-# Re-export from config
-from scrapernhl._config import (
-    DEFAULT_HEADERS,
-    DEFAULT_TIMEOUT,
-    DEFAULT_TEAM,
-    DEFAULT_SEASON,
-    DEFAULT_DATE,
-)
 
 # Legacy functions - imported lazily to avoid heavy dependencies
 # These will be gradually migrated to proper modules
@@ -62,11 +62,11 @@ def __getattr__(name):
         'team_strength_aggregates', '_add_normalized_coordinates',
         'EVENT_MAPPING',
     }
-    
+
     if name in legacy_functions:
         from scrapernhl.nhl import scraper_legacy
         return getattr(scraper_legacy, name)
-    
+
     raise AttributeError(f"module '{__name__}' has no attribute '{name}'")
 
 __all__ = [

@@ -1,7 +1,6 @@
 """NHL roster data scrapers."""
 
 from datetime import datetime
-from typing import Dict, List, Union
 
 import pandas as pd
 import polars as pl
@@ -10,7 +9,7 @@ from scrapernhl.core.http import fetch_json
 from scrapernhl.core.utils import json_normalize
 
 
-def getRosterData(team: str = "MTL", season: Union[str, int] = "20242025") -> List[Dict]:
+def getRosterData(team: str = "MTL", season: str | int = "20242025") -> list[dict]:
     """
     Scrapes NHL roster data for a given team and season.
 
@@ -47,7 +46,7 @@ def getRosterData(team: str = "MTL", season: Union[str, int] = "20242025") -> Li
     ]
 
 
-def scrapeRoster(team: str = "MTL", season: Union[str, int] = "20242025", output_format: str = "pandas") -> pd.DataFrame | pl.DataFrame:
+def scrapeRoster(team: str = "MTL", season: str | int = "20242025", output_format: str = "pandas") -> pd.DataFrame | pl.DataFrame:
     """
     Scrapes NHL roster data for a given team and season.
 

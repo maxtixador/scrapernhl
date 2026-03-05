@@ -2,7 +2,6 @@
 
 import logging
 from datetime import datetime
-from typing import Dict, List, Union
 
 import pandas as pd
 import polars as pl
@@ -13,7 +12,7 @@ from scrapernhl.core.utils import json_normalize
 LOG = logging.getLogger(__name__)
 
 
-def getDraftData(year: Union[str, int] = "2024", round: Union[str, int] = "all") -> List[Dict]:
+def getDraftData(year: str | int = "2024", round: str | int = "all") -> list[dict]:
     """
     Scrapes NHL draft data for a given season.
 
@@ -49,7 +48,7 @@ def getDraftData(year: Union[str, int] = "2024", round: Union[str, int] = "all")
     ]
 
 
-def scrapeDraftData(year: Union[str, int] = "2024", round: Union[str, int] = "all", output_format: str = "pandas") -> pd.DataFrame | pl.DataFrame:
+def scrapeDraftData(year: str | int = "2024", round: str | int = "all", output_format: str = "pandas") -> pd.DataFrame | pl.DataFrame:
     """
     Scrapes NHL draft data for a given season.
 
@@ -65,7 +64,7 @@ def scrapeDraftData(year: Union[str, int] = "2024", round: Union[str, int] = "al
     return json_normalize(raw_data, output_format)
 
 
-def getRecordsDraftData(year: Union[str, int] = "2025") -> List[Dict]:
+def getRecordsDraftData(year: str | int = "2025") -> list[dict]:
     """
     Scrapes NHL draft records for a given season from NHL Records API.
 
@@ -100,7 +99,7 @@ def getRecordsDraftData(year: Union[str, int] = "2025") -> List[Dict]:
     ]
 
 
-def scrapeDraftRecords(year: Union[str, int] = "2025", output_format: str = "pandas") -> pd.DataFrame | pl.DataFrame:
+def scrapeDraftRecords(year: str | int = "2025", output_format: str = "pandas") -> pd.DataFrame | pl.DataFrame:
     """
     Scrapes NHL draft records for a given season from NHL Records API.
 
@@ -115,7 +114,7 @@ def scrapeDraftRecords(year: Union[str, int] = "2025", output_format: str = "pan
     return json_normalize(raw_data, output_format)
 
 
-def getRecordsTeamDraftHistoryData(franchise: Union[str, int] = 1) -> List[Dict]:
+def getRecordsTeamDraftHistoryData(franchise: str | int = 1) -> list[dict]:
     """
     Scrapes NHL team draft history for a given franchise.
 
@@ -151,7 +150,7 @@ def getRecordsTeamDraftHistoryData(franchise: Union[str, int] = 1) -> List[Dict]
     ]
 
 
-def scrapeTeamDraftHistory(franchise: Union[str, int] = 1, output_format: str = "pandas") -> pd.DataFrame | pl.DataFrame:
+def scrapeTeamDraftHistory(franchise: str | int = 1, output_format: str = "pandas") -> pd.DataFrame | pl.DataFrame:
     """
     Scrapes NHL team draft history for a given franchise from NHL Records API.
 

@@ -6,24 +6,29 @@ from typing import Literal
 
 import pandas as pd
 
-from .config import LEAGUES, CACHE_TTL, LeagueType
+from .config import CACHE_TTL, LEAGUES, LeagueType
 from .enrichment import enrich_roster, enrich_schedule, enrich_standings, enrich_stats
-from .parsers import parse_pbp, parse_player_page, parse_roster, parse_schedule, parse_standings, parse_stats
+from .parsers import (
+    parse_pbp,
+    parse_player_page,
+    parse_roster,
+    parse_schedule,
+    parse_standings,
+    parse_stats,
+)
 from .transform import transform_pbp
 from .urls import (
     build_bootstrap_url,
     build_nhl_player_game_log_url,
     build_nhl_player_landing_url,
-    build_nhl_seasons_url,
     build_pbp_url,
     build_player_page_url,
     build_roster_url,
     build_schedule_url,
     build_standings_url,
     build_stats_url,
-    build_teams_by_season_url,
 )
-from .utils import RateLimiter, Cache, get_session, clean_jsonp, validate_game_id
+from .utils import Cache, RateLimiter, clean_jsonp, get_session, validate_game_id
 
 
 class HockeyScraper:
@@ -493,7 +498,11 @@ class HockeyScraper:
         if self.league != 'nhl':
             raise NotImplementedError("scrape_teams() with source is only available for NHL.")
 
-        from .urls import build_nhl_schedule_calendar_url, build_nhl_franchise_url, build_nhl_records_franchise_url
+        from .urls import (
+            build_nhl_franchise_url,
+            build_nhl_records_franchise_url,
+            build_nhl_schedule_calendar_url,
+        )
 
         source_urls = {
             "calendar": build_nhl_schedule_calendar_url(),

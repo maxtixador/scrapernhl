@@ -231,11 +231,11 @@ def _normalize_coordinates(df: pd.DataFrame, config) -> pd.DataFrame:
         df['y'] = ((y_loc - canvas_y / 2) * (85 / canvas_y)).round(2)
 
     # Shot metrics: distance and angle from the goal at (±89, 0).
-    # GOAL_X = 89 ft from center ice (goal line is 11 ft from end boards).
+    # goal_x = 89 ft from center ice (goal line is 11 ft from end boards).
     # Using abs(x) maps both ends to the positive-x goal so that
     # distance/angle are zone-agnostic and comparable across the full game.
-    GOAL_X = 89.0
-    x_from_goal = df['x'].abs() - GOAL_X  # negative = shot in front of net
+    goal_x = 89.0
+    x_from_goal = df['x'].abs() - goal_x  # negative = shot in front of net
     y_from_goal = df['y']
     df['shot_distance_ft'] = np.sqrt(
         x_from_goal ** 2 + y_from_goal ** 2
@@ -340,7 +340,7 @@ def nhlify_goals(df: pd.DataFrame) -> pd.DataFrame:  # ✅ Correct function name
             "shot_distance_ft", "shot_angle_deg",
         ]
 
-        for shot_idx, goal_idx in zip(shot_indices, goal_indices):
+        for shot_idx, goal_idx in zip(shot_indices, goal_indices, strict=False):
             if goal_idx >= len(df):
                 continue
             # Guard: after sorting, the next row should be the goal, but

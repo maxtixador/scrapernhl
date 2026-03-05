@@ -1,24 +1,27 @@
 """NHL data scrapers organized by data type."""
 
-from .teams import getTeamsData, scrapeTeams
-from .schedule import getScheduleData, scrapeSchedule
-from .standings import getStandingsData, scrapeStandings
-from .roster import getRosterData, scrapeRoster
-from .stats import getTeamStatsData, scrapeTeamStats
 from .draft import (
-    getDraftData, scrapeDraftData,
-    getRecordsDraftData, scrapeDraftRecords,
-    getRecordsTeamDraftHistoryData, scrapeTeamDraftHistory
+    getDraftData,
+    getRecordsDraftData,
+    getRecordsTeamDraftHistoryData,
+    scrapeDraftData,
+    scrapeDraftRecords,
+    scrapeTeamDraftHistory,
 )
-from .games import getGameData, scrapePlays, getGoalReplayData
+from .games import getGameData, getGoalReplayData, scrapePlays
 from .players import (
+    scrapeMultiplePlayerStats,
+    scrapePlayerGameLog,
     scrapePlayerProfile,
     scrapePlayerSeasonStats,
-    scrapePlayerGameLog,
-    scrapeMultiplePlayerStats,
-    scrapeTeamRoster,
     scrapeTeamPlayerStats,
+    scrapeTeamRoster,
 )
+from .roster import getRosterData, scrapeRoster
+from .schedule import getScheduleData, scrapeSchedule
+from .standings import getStandingsData, scrapeStandings
+from .stats import getTeamStatsData, scrapeTeamStats
+from .teams import getTeamsData, scrapeTeams
 
 __all__ = [
     # Teams

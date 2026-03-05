@@ -14,13 +14,13 @@ All these leagues use the same API structure with different client codes and key
 
 from __future__ import annotations
 
-import re
 import json
-from typing import Any, Dict, Optional
+import re
 from dataclasses import dataclass
+from typing import Any
 
-import requests
 import pandas as pd
+import requests
 
 
 @dataclass
@@ -30,7 +30,7 @@ class LeagueConfig:
     api_key: str
     base_url: str = "https://lscluster.hockeytech.com/feed/"
     feed_type: str = "gc"  # 'gc' or 'statviewfeed'
-    
+
     def get_api_url(self, game_id: int, lang: str = "en") -> str:
         """Generate the API URL for a game."""
         if self.feed_type == "gc":
@@ -86,47 +86,47 @@ def get_api_events(
     league: str = "qmjhl",
     timeout: int = 10,
     lang: str = "en"
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Fetch raw event data from HockeyTech API for any supported league.
-    
+
     Args:
         game_id: The unique identifier for the game
         league: League code ('qmjhl', 'ohl', 'whl', 'ahl', 'pwhl')
         timeout: Request timeout in seconds (default: 10)
         lang: Language code ('en' or 'fr')
-    
+
     Returns:
         Dictionary containing play-by-play event data
-        
+
     Raises:
         ValueError: If league is not supported
         requests.RequestException: If the API request fails
         KeyError: If the response format is unexpected
-        
+
     Example:
         >>> events = get_api_events(31171, league='qmjhl')
         >>> events = get_api_events(28528, league='ohl')
         >>> events = get_api_events(1028297, league='ahl')
     """
     league = league.lower()
-    
+
     if league not in LEAGUE_CONFIGS:
         raise ValueError(
             f"Unsupported league: {league}. "
             f"Supported leagues: {', '.join(LEAGUE_CONFIGS.keys())}"
         )
-    
+
     config = LEAGUE_CONFIGS[league]
     url = config.get_api_url(game_id, lang)
-    
+
     try:
         response = requests.get(url, timeout=timeout)
         response.raise_for_status()
-        
+
         # Handle JSONP responses (some endpoints return JSONP)
         content = response.text
-        
+
         # Remove JSONP callback wrapper if present
         if content.startswith(('jsonp_', 'angular.callbacks')):
             # Extract JSON from JSONP: callback_name({...})
@@ -136,9 +136,9 @@ def get_api_events(
         elif content.startswith('([') or content.startswith('({'):
             # Some APIs return bare JSONP without callback name: ([...]) or ({...})
             content = content[1:-1]  # Remove wrapping parentheses
-        
+
         data = json.loads(content)
-        
+
         # Extract the actual event data based on feed type
         if config.feed_type == "gc":
             # QMJHL, OHL, WHL format
@@ -147,7 +147,7 @@ def get_api_events(
             # AHL, PWHL format - data is already an array of events
             return data
 
-        
+
     except requests.RequestException as e:
         raise requests.RequestException(
             f"Failed to fetch {league.upper()} game {game_id}: {e}"
@@ -162,13 +162,13 @@ def scrape_game(
     game_id: int,
     league: str = "qmjhl",
     nhlify: bool = True,
-    clean_fn: Optional[callable] = None,
+    clean_fn: callable | None = None,
     timeout: int = 30,
     lang: str = "en"
 ) -> pd.DataFrame:
     """
     Fetch and clean play-by-play data for any HockeyTech league.
-    
+
     Args:
         game_id: The unique identifier for the game
         league: League code ('qmjhl', 'ohl', 'whl', 'ahl', 'pwhl')
@@ -176,29 +176,29 @@ def scrape_game(
         clean_fn: Optional custom cleaning function. If None, uses default cleaning.
         timeout: Maximum time to wait for page load in seconds
         lang: Language code ('en' or 'fr')
-    
+
     Returns:
         Cleaned DataFrame with play-by-play event data ready for analysis
-        
+
     Example:
         >>> # QMJHL game
         >>> df = scrape_game(31171, league='qmjhl')
-        >>> 
+        >>>
         >>> # OHL game
         >>> df = scrape_game(28528, league='ohl')
-        >>> 
+        >>>
         >>> # AHL game with custom cleaning
         >>> from scrapernhl.ahl.scrapers.games import clean_pbp as ahl_clean
         >>> df = scrape_game(1028297, league='ahl', clean_fn=ahl_clean)
     """
     # Fetch raw data
     data = get_api_events(game_id, league, timeout, lang)
-    
+
     # Convert to DataFrame
     df = pd.DataFrame(data)
     df["game_id"] = int(game_id)
     df["league"] = league.upper()
-    
+
     # Apply cleaning function
     if clean_fn is not None:
         df = clean_fn(df, nhlify=nhlify)
@@ -206,20 +206,20 @@ def scrape_game(
         # Use default cleaning (import here to avoid circular imports)
         from ..qmjhl.scrapers.games import clean_pbp
         df = clean_pbp(df, nhlify=nhlify)
-    
+
     return df
 
 
 def get_league_config(league: str) -> LeagueConfig:
     """
     Get the configuration for a specific league.
-    
+
     Args:
         league: League code ('qmjhl', 'ohl', 'whl', 'ahl', 'pwhl')
-    
+
     Returns:
         LeagueConfig object
-        
+
     Raises:
         ValueError: If league is not supported
     """

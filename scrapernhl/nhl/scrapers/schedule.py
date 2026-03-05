@@ -1,20 +1,19 @@
 """NHL schedule data scrapers."""
 
 from datetime import datetime
-from typing import Dict, List, Union
 
 import pandas as pd
 import polars as pl
 
-from scrapernhl.core.http import fetch_json
-from scrapernhl.core.utils import json_normalize
-from scrapernhl.core.progress import console
 from scrapernhl.core.cache import cached
-from scrapernhl.exceptions import APIError, InvalidTeamError, InvalidSeasonError
+from scrapernhl.core.http import fetch_json
+from scrapernhl.core.progress import console
+from scrapernhl.core.utils import json_normalize
+from scrapernhl.exceptions import APIError, InvalidSeasonError, InvalidTeamError
 
 
 @cached(ttl=3600, cache_key_func=lambda team="MTL", season="20252026": f"schedule_{team}_{season}")
-def getScheduleData(team: str = "MTL", season: Union[str, int] = "20252026") -> List[Dict]:
+def getScheduleData(team: str = "MTL", season: str | int = "20252026") -> list[dict]:
     """
     Scrapes raw NHL schedule data for a given team and season.
 
@@ -27,11 +26,11 @@ def getScheduleData(team: str = "MTL", season: Union[str, int] = "20252026") -> 
     """
     console.print_info(f"Fetching schedule for {team} ({season})...")
     season = str(season)
-    
+
     # Validate season format (should be 8 digits like 20242025)
     if not season.isdigit() or len(season) != 8:
         raise InvalidSeasonError(f"Invalid season format '{season}'. Expected 8-digit format like '20242025'.")
-    
+
     url = f"https://api-web.nhle.com/v1/club-schedule-season/{team}/{season}"
 
     try:
@@ -61,7 +60,7 @@ def getScheduleData(team: str = "MTL", season: Union[str, int] = "20252026") -> 
     ]
 
 
-def scrapeSchedule(team: str = "MTL", season: Union[str, int] = "20252026", output_format: str = "pandas") -> pd.DataFrame | pl.DataFrame:
+def scrapeSchedule(team: str = "MTL", season: str | int = "20252026", output_format: str = "pandas") -> pd.DataFrame | pl.DataFrame:
     """
     Scrapes NHL schedule data for a given team and season.
 

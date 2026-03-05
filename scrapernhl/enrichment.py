@@ -12,7 +12,6 @@ import pandas as pd
 
 from .config import month_mapping, month_start_end_mapping
 
-
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
