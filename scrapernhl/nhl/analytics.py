@@ -5,7 +5,6 @@ This module provides high-level analytics functions for:
 - Player impact analysis
 - Team performance analytics
 - Zone start analysis
-- Expected goals (xG) calculations
 - Scoring chance identification
 - Plus/minus calculations
 
@@ -172,47 +171,6 @@ def identify_scoring_chances(
     if is_polars:
         return pl.from_pandas(df_pd)
     return df_pd
-
-
-def prepare_pbp_with_xg(
-    df: pd.DataFrame,
-    goal_x: float = 89.0,
-    goal_y: float = 0.0,
-    rebound_window_s: int = 3
-) -> pd.DataFrame:
-    """Convenience function to engineer xG features and predict xG in one call.
-    
-    This combines engineer_xg_features() and predict_xg_for_pbp() into a single
-    function for easier use.
-    
-    Args:
-        df: Play-by-play DataFrame
-        goal_x: X coordinate of goal (default 89.0)
-        goal_y: Y coordinate of goal (default 0.0)
-        rebound_window_s: Time window in seconds to identify rebounds (default 3)
-    
-    Returns:
-        DataFrame with xG features and predictions added
-    
-    Example:
-        >>> from scrapernhl import scrape_game, prepare_pbp_with_xg
-        >>> game_tuple = scrape_game(game_id=2024020001, include_tuple=True)
-        >>> pbp_with_xg = prepare_pbp_with_xg(game_tuple.data)
-    """
-    from scrapernhl.nhl.scraper_legacy import engineer_xg_features, predict_xg_for_pbp
-    
-    # Engineer features
-    df_with_features = engineer_xg_features(
-        df,
-        goal_x=goal_x,
-        goal_y=goal_y,
-        rebound_window_s=rebound_window_s
-    )
-    
-    # Predict xG
-    df_with_xg = predict_xg_for_pbp(df_with_features)
-    
-    return df_with_xg
 
 
 def calculate_corsi(

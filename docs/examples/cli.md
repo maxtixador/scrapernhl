@@ -256,24 +256,17 @@ python scrapernhl/cli.py game GAME_ID [OPTIONS]
 **Arguments:**
 - `GAME_ID` - NHL game ID (e.g., 2024020001)
 
-### Options
-
-- `--with-xg` - Include expected goals (xG) predictions for shot events
-
 ### Examples
 
 ```bash
 # Basic play-by-play
 python scrapernhl/cli.py game 2024020001
 
-# With expected goals analysis
-python scrapernhl/cli.py game 2024020001 --with-xg
-
 # Export to JSON
 python scrapernhl/cli.py game 2024020001 --format json
 
-# Custom output with xG
-python scrapernhl/cli.py game 2024020001 --with-xg --output game_with_xg.parquet --format parquet
+# Custom output path
+python scrapernhl/cli.py game 2024020001 --output game_pbp.parquet --format parquet
 ```
 
 ### Example Output
@@ -282,14 +275,6 @@ python scrapernhl/cli.py game 2024020001 --with-xg --output game_with_xg.parquet
 Scraping play-by-play for game 2024020001...
 Successfully scraped 312 events
 Saved to: game_2024020001.csv
-```
-
-With xG:
-```
-Scraping play-by-play for game 2024020001...
-Calculated xG for shot events
-Successfully scraped 312 events
-Saved to: game_2024020001_with_xg.csv
 ```
 
 ## Draft Command
@@ -378,7 +363,7 @@ Set up a cron job to scrape games after they finish:
 # scrape_recent_games.sh
 #!/bin/bash
 for GAME_ID in 2024020100 2024020101 2024020102; do
-    python scrapernhl/cli.py game $GAME_ID --with-xg --format parquet
+    python scrapernhl/cli.py game $GAME_ID --format parquet
 done
 ```
 
@@ -480,10 +465,7 @@ python scrapernhl/cli.py pwhl schedule --season 2024
 # Get current standings
 python scrapernhl/cli.py pwhl standings
 
-# Get roster for all teams
-python scrapernhl/cli.py pwhl roster
-
-# Get roster for specific team
+# Get roster for a specific team (--team-id is required)
 python scrapernhl/cli.py pwhl roster --team-id 1
 
 # Get top 50 skater stats

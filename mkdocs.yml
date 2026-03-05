@@ -14,6 +14,9 @@ nav:
       - Scraping Data: examples/scraping.md
       - Advanced Analytics: examples/advanced.md
       - Data Export: examples/export.md
+  - Testing:
+      - Test Summary: NON_NHL_TESTING_SUMMARY.md
+      - Detailed Results: NON_NHL_TESTING_RESULTS.md
   - About: about.md
   - Announcements:
       - Version 0.1.5 : announcements/version-015.md

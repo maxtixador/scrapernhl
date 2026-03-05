@@ -16,8 +16,8 @@ from collections import defaultdict, Counter, namedtuple
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
-import xgboost as xgb
-import joblib
+# xgboost and joblib are kept as lazy imports inside the deprecated
+# engineer_xg_features / predict_xg_for_pbp functions.
 
 # Import zone start functions from utils
 from scrapernhl.core.utils import add_on_event_shift_start_qualifiers
@@ -27,12 +27,29 @@ from scrapernhl.core.logging_config import get_logger
 from scrapernhl.core.progress import console, create_progress_bar
 from scrapernhl.core.cache import cached
 from scrapernhl.exceptions import APIError, RateLimitError, ParsingError, InvalidGameError
+from scrapernhl.urls import (
+    build_nhl_draft_picks_url,
+    build_nhl_franchise_url,
+    build_nhl_goal_replay_url,
+    build_nhl_html_pbp_url,
+    build_nhl_html_shifts_home_url,
+    build_nhl_html_shifts_visitor_url,
+    build_nhl_records_draft_url,
+    build_nhl_records_franchise_url,
+    build_nhl_records_team_draft_history_url,
+    build_nhl_schedule_calendar_url,
+    build_pbp_url,
+    build_roster_url,
+    build_schedule_url,
+    build_standings_url,
+    build_stats_url,
+)
 
 # Logging setup with new infrastructure
 LOG = get_logger(__name__)
 
 # Constants and session setup (use shared config)
-from scrapernhl.config import DEFAULT_HEADERS, DEFAULT_TIMEOUT
+from scrapernhl._config import DEFAULT_HEADERS, DEFAULT_TIMEOUT
 
 SESSION = requests.Session()
 _retries = Retry(
@@ -224,7 +241,7 @@ def convert_json_to_goal_url(json_url):
     parts = json_url.split('/')
     game_id = parts[-2]
     event_id = parts[-1].replace('ev', '').replace('.json', '')
-    return f"https://www.nhl.com/ppt-replay/goal/{game_id}/{event_id}"
+    return build_nhl_goal_replay_url(game_id, event_id)
 
 
 # Scrape NHL Teams
@@ -239,16 +256,9 @@ def getTeamsData(source: str = "calendar") -> List[Dict]:
     - List[Dict]: Raw enriched team data with metadata.
     """
     source_dict = {
-
-        "calendar": "https://api-web.nhle.com/v1/schedule-calendar/now",
-        "franchise": "https://api.nhle.com/stats/rest/en/franchise?sort=fullName&include=lastSeason.id&include=firstSeason.id",
-        "records": (
-            "https://records.nhl.com/site/api/franchise?"
-            "include=teams.id&include=teams.active&include=teams.triCode&"
-            "include=teams.placeName&include=teams.commonName&include=teams.fullName&"
-            "include=teams.logos&include=teams.conference.name&include=teams.division.name&"
-            "include=teams.franchiseTeam.firstSeason.id&include=teams.franchiseTeam.lastSeason.id"
-        ),
+        "calendar": build_nhl_schedule_calendar_url(),
+        "franchise": build_nhl_franchise_url(),
+        "records": build_nhl_records_franchise_url(),
     }
 
     if source not in source_dict:
@@ -306,7 +316,7 @@ def getScheduleData(team: str = "MTL", season: Union[str, int] = "20252026") -> 
     - List[Dict]: Raw schedule records with metadata
     """
     season = str(season)
-    url = f"https://api-web.nhle.com/v1/club-schedule-season/{team}/{season}"
+    url = build_nhl_schedule_url(team, season)
 
     try:
         response = fetch_json(url)
@@ -517,7 +527,7 @@ def scrapeTeamStats(
 
 
 # Scrape NHL Draft Data
-def getDraftDataData(year: Union[str, int] = "2024", round: Union[str, int] = "all") -> List[Dict]:
+def getDraftData(year: Union[str, int] = "2024", round: Union[str, int] = "all") -> List[Dict]:
     """
     Scrapes NHL draft data for a given season.
 
@@ -565,7 +575,7 @@ def scrapeDraftData(year: Union[str, int] = "2024", round: Union[str, int] = "al
     Returns:
     - pd.DataFrame or pl.DataFrame: Draft data with metadata in the specified format.
     """
-    raw_data = getDraftDataData(year, round)
+    raw_data = getDraftData(year, round)
     return json_normalize(raw_data, output_format)
 
 
@@ -2336,11 +2346,13 @@ def scrape_game(game_id:Union[int,str],
     tip = df["timeInPeriodSec"].astype("Int64")   # allow NA
     per = df["Per"].astype("Int64")
 
-    # Compute elapsed for all non-shootout periods; ignore gameType entirely
-    mask_reg_ot = per.ne(5) & tip.notna() & per.notna()
+    # In playoff games (gameType == 3) period 5 is 2nd OT; in regular season it
+    # is the shootout (no clock time).  Only exclude period 5 for regular season.
+    is_playoff = api.get("gameType") in (3, "3")
+    mask_reg_ot = (per.ne(5) | is_playoff) & tip.notna() & per.notna()
     df.loc[mask_reg_ot, "elapsedTime"] = tip[mask_reg_ot] + (per[mask_reg_ot] - 1) * 1200
 
-    
+
 
     # player assignment by event type
     for c in ("player1Id","player2Id","player3Id"):
@@ -2371,7 +2383,7 @@ def scrape_game(game_id:Union[int,str],
     for i in (1,2,3):
         df[f"player{i}Id"] = df[f"player{i}Id"].astype("Int64")
         df[f"player{i}Name"] = df[f"player{i}Id"].map(name_map)
-        
+
     # 1) Build compact strength segments from shifts and expand per-second only for join
     df.columns = _dedup_cols(df.columns)
     shifts_events.columns = _dedup_cols(shifts_events.columns)
@@ -2385,14 +2397,14 @@ def scrape_game(game_id:Union[int,str],
     # Ensure df has gameId column for zone start analysis
     if "gameId" not in df.columns:
         df["gameId"] = game_id
-    
+
     # Filter for ON events only
     on_events = shifts_events[shifts_events["Event"] == "ON"].copy()
     if len(on_events) > 0:
         # Add attack_sign column based on team
         # attack_sign is +1 if team attacks to +x (home team in NHL coords), -1 if attacks to -x
         on_events["attack_sign"] = on_events["isHome"].map({1: 1, 0: -1})
-        
+
         # Apply zone start qualifiers
         on_events_with_zones = add_on_event_shift_start_qualifiers(
             on_events,
@@ -2406,7 +2418,7 @@ def scrape_game(game_id:Union[int,str],
             pbp_y_col="yCoord",
             attack_sign_col="attack_sign"
         )
-        
+
         # Update shifts_events with the new zone start columns
         zone_cols = ["shift_start_type", "start_dot", "start_zone"]
         for col in zone_cols:
@@ -2417,7 +2429,7 @@ def scrape_game(game_id:Union[int,str],
     # pbp.columns = _dedup_cols(pbp.columns)
     shifts_events.columns = _dedup_cols(shifts_events.columns)
     data = pd.concat([df, shifts_events], ignore_index=True)
-    
+
     dups = data.columns[data.columns.duplicated()].tolist()
     if dups:
         LOG.warning(f"Duplicate columns detected: {dups}")
@@ -2638,17 +2650,11 @@ async def scrape_game_async(game_id:Union[int,str],
     tip = df["timeInPeriodSec"].astype("Int64")   # allow NA
     per = df["Per"].astype("Int64")
 
-    # Compute elapsed for all non-shootout periods; ignore gameType entirely
-    mask_reg_ot = per.ne(5) & tip.notna() & per.notna()
+    # In playoff games (gameType == 3) period 5 is 2nd OT; in regular season it
+    # is the shootout (no clock time).  Only exclude period 5 for regular season.
+    is_playoff = api.get("gameType") in (3, "3")
+    mask_reg_ot = (per.ne(5) | is_playoff) & tip.notna() & per.notna()
     df.loc[mask_reg_ot, "elapsedTime"] = tip[mask_reg_ot] + (per[mask_reg_ot] - 1) * 1200
-
-    # (optional) leave shootout rows as NA or set them to last-reg-time + small offsets if you prefer
-    # so_mask = per.eq(5) & tip.notna()
-    # df.loc[so_mask, "elapsedTime"] = df["elapsedTime"].max()
-
-    # Avoid blanket fillna(0) which hides missing-computation issues
-    # If you really need zeros for display, do it only at the end of your notebook:
-    # df["elapsedTime"] = df["elapsedTime"].fillna(0)
 
     # player assignment by event type
     for c in ("player1Id","player2Id","player3Id"):
@@ -3687,6 +3693,9 @@ def engineer_xg_features(
     shot_like_events_prev: tuple = ("SHOT",),   # previous-event types that can parent a rebound
 ) -> pd.DataFrame:
     """
+    .. deprecated::
+        xG functionality has been sunset. This function will be removed in a future release.
+
     Add all xG feature columns to a copy of pbp_df and return it.
 
     Creates/updates:
@@ -3868,8 +3877,21 @@ def predict_xg_for_pbp(pbp_df: pd.DataFrame,
                        feat_path: str = FEAT_PATH,
                        xg_colname: str = "xG") -> pd.DataFrame:
     """
+    .. deprecated::
+        xG functionality has been sunset. This function will be removed in a future release.
+
     Returns a copy of pbp_df with an 'xG' column filled only for shot rows.
     """
+    import warnings
+    warnings.warn(
+        "predict_xg_for_pbp is deprecated and will be removed in a future release. "
+        "xG functionality has been sunset.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    import xgboost as xgb
+    import joblib  # noqa: F401 (used inside _align_to_training_columns)
+
     # Build design matrix from PBP
     shots, X = build_shots_design_matrix(pbp_df)
 
@@ -3933,6 +3955,9 @@ def _align_to_training_columns(X: pd.DataFrame, feat_path: str) -> pd.DataFrame:
 
 def pipeline(game_id):
     """
+    .. deprecated::
+        xG functionality has been sunset. This function will be removed in a future release.
+
     Full pipeline: scrape game PBP, engineer xG features, predict xG,
     build on-ice wide dataset, and scrape shifts + player info.
     Returns (pbp_with_xg_wide, players_df).

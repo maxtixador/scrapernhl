@@ -5,7 +5,7 @@ from typing import Dict, List, Optional, Sequence
 import pandas as pd
 import polars as pl
 import numpy as np
-from scrapernhl.config import DEFAULT_HEADERS, DEFAULT_TIMEOUT, _DOT_XY, _DOT_LABELS
+from scrapernhl._config import DEFAULT_HEADERS, DEFAULT_TIMEOUT, _DOT_XY, _DOT_LABELS
 
 def time_str_to_seconds(time_str: Optional[str]) -> Optional[int]:
     """Convert a time string in 'MM:SS' format to total seconds."""

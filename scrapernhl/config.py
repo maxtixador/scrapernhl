@@ -1,52 +1,199 @@
-"""Config.py : Constants, headers, session configuration for NHL data scraping"""
-import numpy as np
-from scrapernhl.core.logging_config import get_logger
+# scrapernhl/config.py
+"""All league configurations and constants."""
 
-LOG = get_logger(__name__)
-
-# DEFAULTS
-DEFAULT_TEAM = "MTL" # Montreal Canadiens
-DEFAULT_SEASON = "20252026" # 2025-2026 NHL Season
-DEFAULT_DATE = "2025-11-11" # RANDOM DATE IN SEASON
+import os
+from dataclasses import dataclass
+from typing import Literal
 
 
+def _api_key(env_var: str, default: str) -> str:
+    """Return the value of *env_var* if set, otherwise *default*."""
+    return os.environ.get(env_var, default)
 
 
-# API ENDPOINTS
-NHL_API_BASE_URL = "https://api-web.nhle.com"
-NHL_API_BASE_URL_V1 = f"{NHL_API_BASE_URL}/v1"
-
-STANDINGS_ENDPOINT = f"{NHL_API_BASE_URL_V1}/standings/{{date}}" # date in YYYY-MM-DD format
-TEAM_SCHEDULE_ENDPOINT = f"{NHL_API_BASE_URL_V1}/club-schedule-season/{{team}}/{{season}}" # team_abbreviation in XXX format, season in YYYYYYYY format
-FRANCHISES_ENDPOINT = f"{NHL_API_BASE_URL}/stats/rest/en/franchise?sort=fullName&include=lastSeason.id&include=firstSeason.id"
+LeagueType = Literal['nhl', 'ahl', 'ohl', 'whl', 'qmjhl', 'pwhl']
 
 
+@dataclass
+class LeagueConfig:
+    """Configuration for a single league."""
 
-# Constants
-DEFAULT_HEADERS = {
-    "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119 Safari/537.36",
-    "Accept": "application/json,text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-    "Accept-Language": "en-US,en;q=0.5",
-    "Connection": "keep-alive",
+    name: str
+    client_code: str | None
+    api_key: str | None
+    league_id: int | None
+    site_id: int | None
+    default_season: int
+    base_url: str
+    pbp_style: Literal['nhl', 'hockeytech_a', 'hockeytech_b']
+    canvas_size: tuple[int, int]
+    rate_limit_calls: int = 2
+    rate_limit_period: float = 1.0
+    # Length of a single OT period in seconds for the *current* regular-season
+    # format.  Playoff OT is always 20-min (1200 s) full periods.
+    ot_period_length: int = 1200
+    # Historical OT length changes: ordered list of (first_season_id, ot_secs).
+    # The entry with the highest first_season_id that is still <= the queried
+    # season_id wins.  An empty tuple means ot_period_length applies for all
+    # seasons in the API data range.
+    ot_period_length_history: tuple[tuple[int, int], ...] = ()
+
+
+def get_ot_period_length(
+    config: 'LeagueConfig',
+    season_id: int | None = None,
+    is_playoff: bool = False,
+) -> int:
+    """Return the OT period length in seconds for a given season.
+
+    Playoff OT is always 1200 s (20-min full periods, sudden death) for all
+    leagues regardless of the regular-season format.
+
+    If *season_id* is None, or the league has no recorded history, the current
+    ``ot_period_length`` value is returned.
+    """
+    if is_playoff:
+        return 1200
+
+    if season_id is None or not config.ot_period_length_history:
+        return config.ot_period_length
+
+    # Walk history sorted descending; return the ot_seconds for the highest
+    # first_season_id that does not exceed the queried season_id.
+    best = config.ot_period_length  # fallback if season predates all records
+    for first_season, ot_secs in sorted(
+        config.ot_period_length_history, reverse=True
+    ):
+        if season_id >= first_season:
+            best = ot_secs
+            break
+
+    return best
+
+
+# League configurations
+LEAGUES: dict[LeagueType, LeagueConfig] = {
+    'nhl': LeagueConfig(
+        name='NHL',
+        client_code=None,
+        api_key=None,
+        league_id=None,
+        site_id=None,
+        default_season=20252026,
+        base_url='https://api-web.nhle.com',
+        pbp_style='nhl',
+        canvas_size=(200, 85),  # Already in feet
+        rate_limit_calls=100,  # Generous for public API
+    ),
+    'ahl': LeagueConfig(
+        name='AHL',
+        client_code='ahl',
+        api_key=_api_key('SCRAPERNHL_AHL_API_KEY', 'ccb91f29d6744675'),
+        league_id=4,
+        site_id=3,
+        default_season=90,
+        base_url='https://lscluster.hockeytech.com/feed/index.php',
+        pbp_style='hockeytech_a',
+        canvas_size=(850, 400),
+        ot_period_length=300,   # 5-min 3-on-3 OT (regular season)
+    ),
+    'pwhl': LeagueConfig(
+        name='PWHL',
+        client_code='pwhl',
+        api_key=_api_key('SCRAPERNHL_PWHL_API_KEY', '446521baf8c38984'),
+        league_id=1,
+        site_id=0,
+        default_season=8,
+        base_url='https://lscluster.hockeytech.com/feed/index.php',
+        pbp_style='hockeytech_a',
+        canvas_size=(850, 400),
+        ot_period_length=600,   # 10-min 3v3 OT (regular season; unique to PWHL)
+    ),
+    'ohl': LeagueConfig(
+        name='OHL',
+        client_code='ohl',
+        api_key=_api_key('SCRAPERNHL_OHL_API_KEY', 'f1aa699db3d81487'),
+        league_id=1,
+        site_id=1,
+        default_season=83,
+        base_url='https://lscluster.hockeytech.com/feed/index.php',
+        pbp_style='hockeytech_b',
+        canvas_size=(600, 300),
+        ot_period_length=300,   # 5-min 4-on-4 OT (regular season)
+    ),
+    'whl': LeagueConfig(
+        name='WHL',
+        client_code='whl',
+        api_key=_api_key('SCRAPERNHL_WHL_API_KEY', 'f1aa699db3d81487'),
+        league_id=7,
+        site_id=0,
+        default_season=289,
+        base_url='https://lscluster.hockeytech.com/feed/index.php',
+        pbp_style='hockeytech_b',
+        canvas_size=(600, 300),
+        ot_period_length=300,   # 5-min 3-on-3 OT (regular season)
+        # TODO: WHL used 10-min OT before ~2019; exact first season_id for
+        # the 5-min change is unverified.  Add entry like (266, 300) once
+        # the cutoff season is confirmed.
+    ),
+    'qmjhl': LeagueConfig(
+        name='QMJHL',
+        client_code='lhjmq',
+        api_key=_api_key('SCRAPERNHL_QMJHL_API_KEY', 'f322673b6bcae299'),
+        league_id=6,
+        site_id=0,
+        default_season=211,
+        base_url='https://cluster.leaguestat.com/feed/index.php',
+        pbp_style='hockeytech_b',
+        canvas_size=(600, 300),
+        ot_period_length=300,   # 5-min 3-on-3 OT (regular season)
+        # TODO: QMJHL used 10-min OT before ~2019; exact first season_id for
+        # the 5-min change is unverified.  Add entry like (190, 300) once
+        # the cutoff season is confirmed.
+    ),
 }
 
-DEFAULT_TIMEOUT = 10  # seconds
+# Cache TTLs (seconds)
+CACHE_TTL = {
+    'pbp': 0,           # No cache for live data
+    'schedule': 3600,   # 1 hour
+    'roster': 86400,    # 24 hours
+    'player': 86400,    # 24 hours
+    'stats': 3600,      # 1 hour
+    'standings': 1800,  # 30 minutes
+}
 
-# Canonical faceoff dots in NHL coordinates
-_DOT_LABELS = np.array([
-    "OZ_L", "OZ_R", "OZ_C",
-    "NZ_L", "NZ_R", "NZ_C",
-    "DZ_L", "DZ_R", "DZ_C"
-])
+month_mapping = {
+    'Jan': '01',
+    'Feb': '02',
+    'Mar': '03',
+    'Apr': '04',
+    'May': '05',
+    'Jun': '06',
+    'Jul': '07',
+    'Aug': '08',
+    'Sep': '09',
+    'Oct': '10',
+    'Nov': '11',
+    'Dec': '12',
+}
 
-_DOT_XY = np.array([
-    ( 69,  22),  # OZ_L
-    ( 69, -22),  # OZ_R
-    ( 69,   0),  # OZ_C (center - helper dot)
-    ( 20,  22),  # NZ_L
-    ( 20, -22),  # NZ_R
-    (  0,   0),  # NZ_C
-    (-69,  22),  # DZ_L
-    (-69, -22),  # DZ_R
-    (-69,   0),  # DZ_C (center - helper dot)
-], dtype=float)
+# Mapping for month for if it is at the seasonStartYear or seasonEndYear
+month_start_end_mapping = {
+    "seasonStartYear": {
+        'Aug': '08',
+        'Sep': '09',
+        'Oct': '10',
+        'Nov': '11',
+        'Dec': '12',
+    },
+    "seasonEndYear": {
+        'Jan': '01',
+        'Feb': '02',
+        'Mar': '03',
+        'Apr': '04',
+        'May': '05',
+        'Jun': '06',
+        'Jul': '07',
+    }
+}

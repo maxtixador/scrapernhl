@@ -4,7 +4,7 @@
 [![Python Version](https://img.shields.io/badge/python-3.9%2B-blue)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
-Hockey (*not only NHL anymore 😀*) data scraping package with Expected Goals (xG) model, advanced analytics, and multi-league support architecture.
+Hockey (*not only NHL anymore 😀*) data scraping package with advanced analytics and multi-league support architecture.
 
 ## Overview
 
@@ -60,7 +60,7 @@ rosters = game_data.rosters
 - See [Multi-League Scraper Reference](multi-league-scraper-reference.md)
 
 ### Analytics
-- Pre-trained XGBoost Expected Goals (xG) model
+
 - Corsi and Fenwick calculations
 - Scoring chance classification (high/medium/low danger)
 - Time on ice (TOI) metrics

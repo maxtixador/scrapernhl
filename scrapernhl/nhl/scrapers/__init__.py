@@ -6,7 +6,7 @@ from .standings import getStandingsData, scrapeStandings
 from .roster import getRosterData, scrapeRoster
 from .stats import getTeamStatsData, scrapeTeamStats
 from .draft import (
-    getDraftDataData, scrapeDraftData,
+    getDraftData, scrapeDraftData,
     getRecordsDraftData, scrapeDraftRecords,
     getRecordsTeamDraftHistoryData, scrapeTeamDraftHistory
 )
@@ -32,7 +32,7 @@ __all__ = [
     # Stats
     "getTeamStatsData", "scrapeTeamStats",
     # Draft
-    "getDraftDataData", "scrapeDraftData",
+    "getDraftData", "scrapeDraftData",
     "getRecordsDraftData", "scrapeDraftRecords",
     "getRecordsTeamDraftHistoryData", "scrapeTeamDraftHistory",
     # Games & Plays

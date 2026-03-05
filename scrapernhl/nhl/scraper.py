@@ -16,7 +16,7 @@ from scrapernhl.nhl.scrapers.standings import getStandingsData, scrapeStandings
 from scrapernhl.nhl.scrapers.roster import getRosterData, scrapeRoster
 from scrapernhl.nhl.scrapers.stats import getTeamStatsData, scrapeTeamStats
 from scrapernhl.nhl.scrapers.draft import (
-    getDraftDataData,
+    getDraftData,
     scrapeDraftData,
     getRecordsDraftData,
     scrapeDraftRecords,
@@ -36,7 +36,7 @@ from scrapernhl.core.utils import time_str_to_seconds, json_normalize, _dedup_co
 
 
 # Re-export from config
-from scrapernhl.config import (
+from scrapernhl._config import (
     DEFAULT_HEADERS,
     DEFAULT_TIMEOUT,
     DEFAULT_TEAM,
@@ -57,11 +57,10 @@ def __getattr__(name):
         'seconds_matrix', 'strengths_by_second', 'toi_by_strength_all',
         'shared_toi_teammates_by_strength', 'shared_toi_opponents_by_strength',
         'combos_teammates_by_strength', 'combos_opponents_by_strength', 'combo_toi_by_strength',
-        'combo_shot_metrics_by_strength', 'engineer_xg_features', 'build_shots_design_matrix',
-        'predict_xg_for_pbp', 'pipeline', 'toi_by_strength', 'toi_by_player_and_strength',
+        'combo_shot_metrics_by_strength', 'toi_by_strength', 'toi_by_player_and_strength',
         'on_ice_stats_by_player_strength', 'combo_on_ice_stats', 'combo_on_ice_stats_both_teams',
         'team_strength_aggregates', '_add_normalized_coordinates',
-        'EVENT_MAPPING', 'MODEL_PATH', 'FEAT_PATH', 'BASE_NUM', 'BASE_BOOL', 'CAT_COLS', 'EVENTS_FOR_XG',
+        'EVENT_MAPPING',
     }
     
     if name in legacy_functions:
@@ -87,7 +86,7 @@ __all__ = [
     "getTeamStatsData",
     "scrapeTeamStats",
     # Draft
-    "getDraftDataData",
+    "getDraftData",
     "scrapeDraftData",
     "getRecordsDraftData",
     "scrapeDraftRecords",
@@ -141,10 +140,6 @@ __all__ = [
     "combos_opponents_by_strength",
     "combo_toi_by_strength",
     "combo_shot_metrics_by_strength",
-    "engineer_xg_features",
-    "build_shots_design_matrix",
-    "predict_xg_for_pbp",
-    "pipeline",
     "toi_by_strength",
     "toi_by_player_and_strength",
     "on_ice_stats_by_player_strength",
@@ -153,10 +148,4 @@ __all__ = [
     "team_strength_aggregates",
     "_add_normalized_coordinates",
     "EVENT_MAPPING",
-    "MODEL_PATH",
-    "FEAT_PATH",
-    "BASE_NUM",
-    "BASE_BOOL",
-    "CAT_COLS",
-    "EVENTS_FOR_XG",
 ]

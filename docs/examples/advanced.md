@@ -40,44 +40,6 @@ print("\nRosters:")
 game_tuple.rosters
 ```
 
-## Expected Goals (xG) Features
-
-```python
-from scrapernhl import engineer_xg_features, predict_xg_for_pbp
-
-# Engineer xG features
-pbp_with_features = engineer_xg_features(pbp)
-
-# Predict xG
-pbp_with_xg = predict_xg_for_pbp(pbp_with_features)
-
-# Get shots and goals
-shots = pbp_with_xg[pbp_with_xg['Event'].isin(['SHOT', 'GOAL', 'MISS'])].copy()
-
-print(f"Total shot attempts: {len(shots)}")
-
-print("\nShot attempts with xG:")
-shots[['period', 'timeInPeriod', 'Event', 'eventTeam', 'player1Id', 'xG', 'distanceFromGoal']].head(10)
-
-# Calculate team xG totals
-home_team = game_tuple.homeTeam
-away_team = game_tuple.awayTeam
-
-home_shots = shots[shots['eventTeam'] == home_team]
-away_shots = shots[shots['eventTeam'] == away_team]
-
-home_xg = home_shots['xG'].sum()
-away_xg = away_shots['xG'].sum()
-
-home_goals = len(pbp[(pbp['Event'] == 'GOAL') & (pbp['eventTeam'] == home_team)])
-away_goals = len(pbp[(pbp['Event'] == 'GOAL') & (pbp['eventTeam'] == away_team)])
-
-print(f"\n{away_team} @ {home_team}")
-print(f"Score: {away_goals} - {home_goals}")
-print(f"xG: {away_xg:.2f} - {home_xg:.2f}")
-print(f"xG differential: {home_xg - away_xg:.2f} (positive favors {home_team})")
-```
-
 ## Time on Ice (TOI) Analysis
 
 ```python
@@ -160,7 +122,6 @@ top_10_lines_5v5
 ```python
 from scrapernhl import scrape_game, on_ice_stats_by_player_strength
 
-# Get game with xG
 pbp, _ = scrape_game(2024020001)
 
 # Calculate on-ice stats for each player
@@ -174,12 +135,6 @@ player_stats = on_ice_stats_by_player_strength(
 print("Best Corsi For % (min 5 min TOI):")
 cf_leaders = player_stats[player_stats['TOI'] >= 5].nlargest(10, 'CF%')
 print(cf_leaders[['player', 'team', 'strength', 'TOI', 'CF', 'CA', 'CF%']])
-
-# Show players with best xG differential
-print("\\nBest xG differential:")
-xg_leaders = player_stats[player_stats['TOI'] >= 5]
-xg_leaders['xG_diff'] = xg_leaders['xG'] - xg_leaders['xGA']
-print(xg_leaders.nlargest(10, 'xG_diff')[['player', 'team', 'xG', 'xGA', 'xG_diff']])
 ```
 
 ## Team-Level Aggregates
@@ -189,20 +144,20 @@ from scrapernhl import team_strength_aggregates
 
 # Calculate team stats by strength
 team_stats = team_strength_aggregates(
-    pbp_with_xg,
+    pbp,
     include_goalies=False,
     rates=True,
     min_TOI=1
 )
 
 print("Team statistics by strength:")
-team_stats[['team', 'minutes', 'CF', 'CA', 'xG', 'xGA', 'GF', 'GA']].sort_values(by=['minutes'], ascending=False)
+team_stats[['team', 'minutes', 'CF', 'CA', 'GF', 'GA']].sort_values(by=['minutes'], ascending=False)
 
 # 5v5 stats only
 stats_5v5 = team_stats[team_stats['strength'] == '5v5'].copy()
 
 print("\n5v5 Team Stats:")
-stats_5v5[['team', 'minutes', 'CF', 'CA', 'xG', 'xGA', 'GF', 'GA']]
+stats_5v5[['team', 'minutes', 'CF', 'CA', 'GF', 'GA']]
 ```
 
 ## Multi-Game Season Analysis
@@ -221,9 +176,6 @@ for gid in game_ids_to_scrape:
         print(f"Processing game {gid}...")
         game_tuple = scrape_game(gid, include_tuple=True)
         pbp = game_tuple.data
-        pbp = engineer_xg_features(pbp)
-        pbp = predict_xg_for_pbp(pbp)
-        
         stats = team_strength_aggregates(pbp)
         stats['game_id'] = gid
         all_team_stats.append(stats)
@@ -233,14 +185,12 @@ for gid in game_ids_to_scrape:
 # Combine all games
 if all_team_stats:
     season_stats = pd.concat(all_team_stats, ignore_index=True)
-    
+
     # Aggregate by team
     team_summary = season_stats.groupby('team').agg({
         'minutes': 'sum',
         'CF': 'sum',
         'CA': 'sum',
-        'xG': 'sum',
-        'xGA': 'sum',
         'GF': 'sum',
         'GA': 'sum'
     }).reset_index()
@@ -261,15 +211,11 @@ The Phase 4 analytics module provides comprehensive statistical analysis and vis
 from scrapernhl import (
     identify_scoring_chances,
     display_scoring_chances,
-    engineer_xg_features
 )
 
 # Get game data
 game_tuple = scrape_game(game_id, include_tuple=True)
 pbp = game_tuple.data
-
-# Calculate shot metrics (distance and angle are calculated by engineer_xg_features)
-pbp = engineer_xg_features(pbp)
 
 # Identify high-danger, medium-danger, and low-danger chances
 pbp = identify_scoring_chances(pbp)
@@ -426,9 +372,7 @@ game_id = 2024020001
 game_tuple = scrape_game(game_id, include_tuple=True)
 pbp = game_tuple.data
 
-# 2. Engineer features (includes shot distance and angle)
-pbp = engineer_xg_features(pbp)
-pbp = predict_xg_for_pbp(pbp)
+# 2. Identify scoring chances
 pbp = identify_scoring_chances(pbp)
 
 # 3. Calculate all metrics

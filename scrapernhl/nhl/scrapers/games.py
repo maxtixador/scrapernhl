@@ -13,7 +13,7 @@ from scrapernhl.core.http import fetch_json
 from scrapernhl.core.utils import json_normalize
 from scrapernhl.core.progress import console, create_progress_bar
 from scrapernhl.core.cache import cached
-from scrapernhl.config import DEFAULT_HEADERS, DEFAULT_TIMEOUT
+from scrapernhl._config import DEFAULT_HEADERS, DEFAULT_TIMEOUT
 
 LOG = logging.getLogger(__name__)
 

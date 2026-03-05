@@ -7,7 +7,7 @@ import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
-from scrapernhl.config import DEFAULT_HEADERS, DEFAULT_TIMEOUT
+from scrapernhl._config import DEFAULT_HEADERS, DEFAULT_TIMEOUT
 from scrapernhl.core.logging_config import get_logger, log_api_request
 from scrapernhl.exceptions import APIError, RateLimitError
 

@@ -13,7 +13,7 @@ from scrapernhl.core.utils import json_normalize
 LOG = logging.getLogger(__name__)
 
 
-def getDraftDataData(year: Union[str, int] = "2024", round: Union[str, int] = "all") -> List[Dict]:
+def getDraftData(year: Union[str, int] = "2024", round: Union[str, int] = "all") -> List[Dict]:
     """
     Scrapes NHL draft data for a given season.
 
@@ -61,7 +61,7 @@ def scrapeDraftData(year: Union[str, int] = "2024", round: Union[str, int] = "al
     Returns:
     - pd.DataFrame or pl.DataFrame: Draft data with metadata in the specified format.
     """
-    raw_data = getDraftDataData(year, round)
+    raw_data = getDraftData(year, round)
     return json_normalize(raw_data, output_format)
 
 

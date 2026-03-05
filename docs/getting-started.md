@@ -1,18 +1,14 @@
 # Getting Started
 
-Install the package and start scraping NHL data in minutes.
+Install the package and start scraping hockey data in minutes.
 
 ## Installation
 
 ### From PyPI (Stable)
 
-Install the latest stable version:
-
 ```bash
 pip install scrapernhl
 ```
-
-> **Note:** Version 0.1.5 (latest) includes critical bug fixes for multi-league scrapers. See the [CHANGELOG](https://github.com/maxtixador/scrapernhl/blob/master/CHANGELOG.md) for details.
 
 Or with uv:
 
@@ -22,21 +18,11 @@ uv add scrapernhl
 
 ### From GitHub (Latest)
 
-Install the development version with the latest features and fixes:
-
 ```bash
 pip install git+https://github.com/maxtixador/scrapernhl.git
 ```
 
-Or with uv:
-
-```bash
-uv pip install git+https://github.com/maxtixador/scrapernhl.git
-```
-
 ### From Source
-
-For development or local modifications:
 
 ```bash
 git clone https://github.com/maxtixador/scrapernhl.git
@@ -44,128 +30,249 @@ cd scrapernhl
 pip install -e .
 ```
 
+---
 
-## Quick Start
+## Supported Leagues
 
-### Command-Line Interface
+| Key | League | API Style |
+| --- | --- | --- |
+| `nhl` | National Hockey League | Native NHL REST API |
+| `ahl` | American Hockey League | HockeyTech |
+| `pwhl` | Professional Women's Hockey League | HockeyTech |
+| `ohl` | Ontario Hockey League | HockeyTech |
+| `whl` | Western Hockey League | HockeyTech |
+| `qmjhl` | Quebec Maritimes Junior Hockey League | HockeyTech |
 
-The fastest way to get started is using the CLI:
+---
+
+## Two APIs: OOP and Functional
+
+### OOP API — `HockeyScraper`
+
+The main interface. Create one scraper per league:
+
+```python
+from scrapernhl import HockeyScraper
+
+# Works for any league
+scraper = HockeyScraper('ahl')
+
+standings = scraper.standings()
+pbp       = scraper.play_by_play(1027781)
+stats     = scraper.player_stats(position='skaters')
+schedule  = scraper.schedule()
+roster    = scraper.roster(team='390')
+```
+
+### Functional API — `scrape()`
+
+One-liner for quick lookups:
+
+```python
+from scrapernhl import scrape
+
+pbp      = scrape('ahl', 'pbp', game_id=1027781)
+stats    = scrape('ahl', 'stats', season=90, position='skaters')
+schedule = scrape('nhl', 'schedule', team='MTL', season=20232024)
+```
+
+---
+
+## Quick Examples by League
+
+### NHL
+
+```python
+from scrapernhl import HockeyScraper
+
+nhl = HockeyScraper('nhl')
+
+# Current standings (all 32 teams)
+standings = nhl.standings()
+
+# MTL schedule for 2023-24 season
+schedule = nhl.schedule(team='MTL', season=20232024)
+
+# MTL roster
+roster = nhl.roster(team='MTL', season=20232024)
+
+# MTL skater stats
+stats = nhl.player_stats(team='MTL', season=20232024, position='skaters')
+
+# Play-by-play (basic — JSON API only)
+pbp = nhl.play_by_play(2023020001)
+
+# Full game pipeline (HTML + JSON merged, includes on-ice players)
+full_pbp = nhl.scrape_game(2023020001)
+
+# Draft picks
+draft = nhl.draft(year=2024, round='all')
+```
+
+### AHL
+
+```python
+from scrapernhl import HockeyScraper
+
+ahl = HockeyScraper('ahl')
+
+# Current standings
+standings = ahl.standings()                   # default_season=90
+
+# Skater stats for all teams
+skaters = ahl.player_stats(season=90, position='skaters')  # 1089 players
+
+# Goalie stats
+goalies = ahl.player_stats(season=90, position='goalies')
+
+# Schedule for all teams
+schedule = ahl.schedule(season=90)
+
+# Roster (team ID from bootstrap)
+teams = ahl.teams          # list of dicts with 'id', 'name', ...
+roster = ahl.roster(team=str(teams[0]['id']))
+
+# Play-by-play
+pbp = ahl.play_by_play(1027781)    # 61 events
+```
+
+### PWHL / OHL / WHL / QMJHL
+
+All non-NHL leagues share the same method signatures:
+
+```python
+from scrapernhl import HockeyScraper
+
+league = HockeyScraper('qmjhl')   # or 'pwhl', 'ohl', 'whl'
+
+# Bootstrap data is auto-fetched on init
+teams        = league.teams
+season_id    = league.current_season_id
+current_seas = league.get_current_season()
+
+# Core data
+standings = league.standings()
+schedule  = league.schedule()
+stats     = league.player_stats(position='skaters')
+pbp       = league.play_by_play(31909)
+
+# Roster (requires a numeric team ID)
+teams     = league.get_teams()
+roster    = league.roster(team=str(teams[0]['id']))
+```
+
+---
+
+## NHL Analytics Pipeline
+
+```python
+from scrapernhl import HockeyScraper
+
+nhl = HockeyScraper('nhl')
+game_id = 2023020001
+
+# 1. Full game data (HTML + JSON merged, with on-ice player lists)
+pbp    = nhl.scrape_game(game_id)
+shifts = nhl.shifts(game_id)
+
+# 2. Per-player on-ice stats (Corsi, Fenwick, TOI)
+player_stats = nhl.on_ice_stats(pbp, rates=True)
+
+# 3. Per-team strength-state aggregates
+team_stats = nhl.team_strength_aggregates(pbp, rates=True)
+
+# 5. Player-combination stats (e.g. 2-player combos for MTL)
+combos = nhl.combo_on_ice_stats(pbp, focus_team='MTL', n_team=2)
+
+# 6. Time-on-ice analysis
+matrix    = nhl.seconds_matrix(pbp, shifts)
+strengths = nhl.strengths_by_second(matrix)
+toi       = nhl.toi_by_strength_all(matrix, strengths)
+pairs     = nhl.shared_toi_teammates(matrix, strengths)
+```
+
+---
+
+## Command-Line Interface
 
 ```bash
-# Get help
-python scrapernhl/cli.py --help
+# All leagues are available as subcommands
+python -m scrapernhl --help
 
-# Scrape all NHL teams
-python scrapernhl/cli.py teams
+# NHL commands (top-level)
+python -m scrapernhl teams
+python -m scrapernhl schedule MTL 20252026
+python -m scrapernhl standings
+python -m scrapernhl roster MTL 20252026
+python -m scrapernhl stats MTL 20252026
+python -m scrapernhl game 2024020001
+python -m scrapernhl draft 2024
 
-# Get a team's schedule
-python scrapernhl/cli.py schedule MTL 20252026
+# Non-NHL leagues (subcommands: ahl, pwhl, ohl, whl, qmjhl)
+python -m scrapernhl ahl standings
+python -m scrapernhl ahl game 1027781
+python -m scrapernhl ahl stats --season 90
+python -m scrapernhl ahl roster --help
+python -m scrapernhl pwhl standings
 
-# Get current standings
-python scrapernhl/cli.py standings
+# Save output
+python -m scrapernhl ahl standings -o standings.csv
+python -m scrapernhl nhl standings -f json -o standings.json
+python -m scrapernhl ahl stats --season 90 -f parquet -o stats.parquet
 ```
 
-See [CLI Examples](examples/cli.md) for more examples.
+---
 
-### Python API
+## Accessing Bootstrap Metadata (non-NHL)
 
-The main function you'll use most is `scrapeGame()`:
+Non-NHL leagues pre-fetch configuration data on init. Use it to discover valid team and season IDs:
 
 ```python
-from scrapernhl import scrapeGame
+from scrapernhl import HockeyScraper
 
-# Scrape complete game data (play-by-play + rosters + metadata)
-# This is THE MAIN FUNCTION - it gets everything you need in one call
-game_data = scrapeGame(2024020001, include_tuple=True)
+ahl = HockeyScraper('ahl')
 
-print(f"Game: {game_data.awayTeam} @ {game_data.homeTeam}")
-print(f"Events: {len(game_data.data)}")
+# Teams
+for team in ahl.teams:
+    print(team['id'], team['name'])
 
-# Access the data
-pbp = game_data.data  # Play-by-play DataFrame
-rosters = game_data.rosters  # Player rosters
+# Current season
+print(ahl.current_season_id)     # e.g. '90'
+season = ahl.get_current_season()
+
+# All seasons
+seasons = ahl.get_seasons('all')      # list of dicts
+seasons = ahl.get_seasons('regular')  # regular season only
+seasons = ahl.get_seasons('playoff')  # playoff only
+
+# Divisions / conferences
+divisions = ahl.get_divisions()
+conferences = ahl.get_conferences()
 ```
 
-Other useful scraping functions:
+---
+
+## Raw Access
+
+Inspect the URL or raw JSON before parsing:
 
 ```python
-from scrapernhl import scrapeTeams, scrapeSchedule, scrapeStandings
+from scrapernhl import HockeyScraper
 
-# Scrape teams
-teams = scrapeTeams()
+ahl = HockeyScraper('ahl')
 
-# Scrape schedule  
-schedule = scrapeSchedule('MTL', '20252026')
+# Get the URL that would be called
+url = ahl.url_for('pbp', game_id=1027781)
+print(url)
 
-# Scrape standings
-standings = scrapeStandings('2026-01-01')
-
-# Player stats
-from scrapernhl import scrapePlayerSeasonStats
-stats = scrapePlayerSeasonStats(8478402, "20242025")  # Connor McDavid
-
-# Advanced analytics
-from scrapernhl import calculate_corsi, identify_scoring_chances, create_analytics_report
-
-corsi = calculate_corsi(pbp)
-chances = identify_scoring_chances(pbp)
-report = create_analytics_report(pbp, rosters)
+# Get raw JSON without any transformation
+raw = ahl.fetch_raw('standings', season=90)
 ```
 
-**Note**: The function is named `scrapeGame` (camelCase) to match naming conventions (`scrapeTeams`, `scrapeSchedule`, etc.). The old `scrape_game` (snake_case) still works for backward compatibility.
-
-See [API Reference](api.md) for all available functions.
-
-## Project Structure
-
-ScraperNHL v0.1.5 supports 6 hockey leagues with a modular structure:
-
-```
-scrapernhl/
-├── core/          # Shared utilities (all leagues)
-├── nhl/           # NHL scrapers and analytics
-├── pwhl/          # PWHL support
-├── ahl/           # AHL support
-├── ohl/           # OHL support
-├── whl/           # WHL support
-├── qmjhl/         # QMJHL support
-└── cli.py         # Multi-league CLI
-```
-
-### Multi-League Support (New in v0.1.5)
-
-Each league has its own module with consistent API:
-
-```python
-# PWHL
-from scrapernhl.pwhl.scrapers import scrapeTeams, scrapeSchedule, scrapeStandings
-
-# AHL
-from scrapernhl.ahl.scrapers import scrapeTeams, scrapeRoster
-
-# OHL
-from scrapernhl.ohl.scrapers import scrapeTeams, scrapePlayerStats
-
-# WHL
-from scrapernhl.whl.scrapers import scrapeTeams, scrape_game
-
-# QMJHL
-from scrapernhl.qmjql.scrapers import scrapeTeams, scrapeStandings
-```
-
-### Backward Compatibility
-
-For backward compatibility, all NHL functions are re-exported at the package level:
-
-```python
-# These are equivalent:
-from scrapernhl import scrapeTeams
-from scrapernhl.nhl.scrapers.teams import scrapeTeams
-```
-
-See the [Multi-League API Examples](multi-league-api-examples.md) and [Multi-League Scraper Reference](multi-league-scraper-reference.md) for comprehensive documentation.
+---
 
 ## Requirements
 
-- Python >= 3.9 (tested on 3.9-3.13)
-- See full dependencies in `pyproject.toml`
+- Python >= 3.9
+- Network access to public NHL / HockeyTech APIs
+- See `pyproject.toml` for full dependency list
