@@ -68,7 +68,6 @@ All per-player and per-combination analytics functions (`on_ice_stats_by_player_
 |-----|--------|
 | `urllib3` minimum | Bumped from `2.0.0` to `2.0.7` to prevent silent truncation of chunked HTTP responses (incomplete PBP data with no error). |
 | `pandas` minimum | Updated to `>=2.2.3` for NumPy 2.x compatibility. |
-| README PWHL name | Corrected "Provincial" → "Professional" Women's Hockey League. |
 
 Upgrade:
 
