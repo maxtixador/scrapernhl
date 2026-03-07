@@ -20,11 +20,8 @@ jobs:
       - name: Set up Python 3.12
         run: uv python install 3.12
 
-      - name: Install ruff
-        run: uv pip install ruff
-
       - name: Run ruff
-        run: uv run ruff check scrapernhl/
+        run: uvx ruff check scrapernhl/
 
   test:
     runs-on: ${{ matrix.os }}
@@ -84,7 +81,7 @@ jobs:
             click==8.0.0 \
             joblib==1.3.0 \
             numpy==2.0.0 \
-            pandas==2.0.0 \
+            pandas==2.2.2 \
             polars==1.0.0 \
             requests==2.31.0 \
             rich==13.0.0 \
@@ -100,4 +97,4 @@ jobs:
           uv pip install pytest pytest-cov
 
       - name: Run tests (skip integration)
-        run: uv run pytest -v -m "not integration"
+        run: .venv/bin/python -m pytest -v -m "not integration"
