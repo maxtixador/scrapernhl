@@ -47,6 +47,13 @@ Comprehensive reference for all `scrapernhl` functions, parameters, and return v
   - [team\_strength\_aggregates()](#team_strength_aggregates)
 - [Functional API — scrape()](#functional-api--scrape)
 - [CLI Reference](#cli-reference)
+- [Legacy NHL Scraper — scraper\_legacy.py](#legacy-nhl-scraper-scraper_legacypy)
+  - [Importing legacy functions](#importing-legacy-functions)
+  - [Core PBP functions](#core-pbp-functions)
+  - [Shift & strength pipeline](#shift--strength-pipeline)
+  - [On-ice stats & TOI](#on-ice-stats--toi)
+  - [Combination stats](#combination-stats)
+  - [Team aggregates & expected goals](#team-aggregates--expected-goals)
 - [Strength Notation](#strength-notation)
 
 ---
@@ -1742,6 +1749,110 @@ python -m scrapernhl ohl stats --player-type skater
 python -m scrapernhl whl game 1022126
 python -m scrapernhl qmjhl standings -f json
 ```
+
+---
+
+## Legacy NHL Scraper — scraper_legacy.py
+
+`scraper_legacy.py` is the original NHL analytics engine. It remains fully functional in 0.3.x and contains all heavy per-player and per-combination stat functions that have not yet been ported to the new module structure.
+
+All functions are accessible via **lazy import** through `scrapernhl.nhl.scraper` (no heavy dependencies are loaded until you actually call a legacy function) or by importing `scrapernhl.nhl.scraper_legacy` directly.
+
+!!! note
+    These functions are NHL-only. They operate on DataFrames produced by `scrape_game()`. For non-NHL leagues use `HockeyScraper('<league>').play_by_play()`.
+
+---
+
+### Importing legacy functions
+
+```python
+# Option A — via the nhl scraper module (lazy, preferred)
+from scrapernhl.nhl.scraper import (
+    scrape_game,
+    on_ice_stats_by_player_strength,
+    toi_by_player_and_strength,
+    combo_on_ice_stats,
+    combo_on_ice_stats_both_teams,
+    team_strength_aggregates,
+)
+
+# Option B — direct import (loads xgboost / polars / numpy immediately)
+from scrapernhl.nhl.scraper_legacy import scrape_game
+
+# Option C — via HockeyScraper convenience wrappers (recommended for new code)
+from scrapernhl import HockeyScraper
+nhl = HockeyScraper('nhl')
+pbp = nhl.scrape_game(2024020001)
+```
+
+---
+
+### Core PBP functions
+
+| Function | Signature | Description |
+|---|---|---|
+| `scrape_game()` | `scrape_game(game_id, *, shifts=True, html_pbp=True, output_format='pandas') -> pd.DataFrame` | Full enriched PBP with shifts, strengths, and on-ice players. The main entry point for all analytics. |
+| `scrape_game_async()` | `scrape_game_async(game_id, ...) -> pd.DataFrame` | Async version of `scrape_game()`. |
+| `scrapePlays()` | `scrapePlays(game, output_format='pandas') -> pd.DataFrame` | JSON PBP only (no HTML enrichment). Faster but less complete. |
+| `getGameData()` | `getGameData(game, addGoalReplayData=False) -> dict` | Raw game JSON from the NHL API. |
+| `scrape_html_pbp()` | `scrape_html_pbp(game_id, return_raw=False) -> pd.DataFrame` | Parse HTML play-by-play sheet. Used internally by `scrape_game()`. |
+| `scrape_shifts()` | `scrape_shifts(game_id) -> pd.DataFrame` | Parse HTML shift chart into a tidy shift DataFrame. |
+| `getGoalReplayData()` | `getGoalReplayData(json_url) -> dict` | Fetch goal-replay sprite frame data. |
+
+---
+
+### Shift & strength pipeline
+
+These functions form the low-level strength/TOI backbone used by the higher-level stat functions.
+
+| Function | Description |
+|---|---|
+| `build_shifts_events(shifts)` | Convert shift DataFrame into ON/OFF boundary events table. |
+| `add_strengths_to_shifts_events(shifts_events, strengths_df)` | Annotate each ON/OFF event with the strength state at that second. |
+| `build_strength_segments_from_shifts(shifts)` | Build contiguous strength segments from the shift chart. |
+| `strengths_by_second_from_segments(segments)` | Turn segments into a per-second strength lookup Series. |
+| `seconds_matrix(df, shifts)` | Build a player × second presence matrix (input to TOI math). |
+| `strengths_by_second(matrix_df)` | Map each column (second) of the presence matrix to a strength label. |
+| `toi_by_strength_all(matrix_df, strengths_df)` | Total TOI for every player × strength combination. |
+
+---
+
+### On-ice stats & TOI
+
+| Function | Signature | Description |
+|---|---|---|
+| `toi_by_strength(pbp_change_events)` | `toi_by_strength(df) -> pd.DataFrame` | Per-team TOI broken out by `EV / PP / PK / other`. |
+| `toi_by_player_and_strength(pbp_change_events)` | `toi_by_player_and_strength(df) -> pd.DataFrame` | Per-player TOI split by strength state from the **player's team perspective** (fixed in 0.3.2 for the alphabetically second team). |
+| `on_ice_stats_by_player_strength(pbp, team)` | `on_ice_stats_by_player_strength(pbp, team) -> pd.DataFrame` | Corsi / Fenwick / goals for every player × strength, from `team`'s perspective. |
+| `build_on_ice_long(df)` | `build_on_ice_long(df) -> pd.DataFrame` | Expand the compact on-ice player columns to long format (one row per player per event). |
+| `build_on_ice_wide(df, ...)` | `build_on_ice_wide(df, ...) -> pd.DataFrame` | Pivot long on-ice data back to wide format for downstream modeling. |
+| `shared_toi_teammates_by_strength(...)` | — | Pairwise shared TOI for all teammate pairs at each strength. |
+| `shared_toi_opponents_by_strength(...)` | — | Pairwise shared TOI for all opponent pairs at each strength. |
+
+---
+
+### Combination stats
+
+| Function | Description |
+|---|---|
+| `combo_on_ice_stats(pbp, focus_team)` | Corsi / Fenwick / goals for every N-player combination from `focus_team`'s perspective. Strength labels use `focus_team`'s perspective (fixed in 0.3.2). |
+| `combo_on_ice_stats_both_teams(pbp)` | Runs `combo_on_ice_stats()` for home and away and concatenates results. Both teams now get correct perspective labels (fixed in 0.3.2). |
+| `combos_teammates_by_strength(...)` | Pairwise teammate combination TOI by strength. |
+| `combos_opponents_by_strength(...)` | Pairwise opponent combination TOI by strength. |
+| `combo_toi_by_strength(...)` | Aggregate TOI for multi-player combinations at each strength. |
+| `combo_shot_metrics_by_strength(...)` | Corsi / Fenwick / xG for multi-player combinations. |
+
+---
+
+### Team aggregates & expected goals
+
+| Function | Description |
+|---|---|
+| `team_strength_aggregates(pbp)` | Per-team Corsi, Fenwick, goals, TOI, and xG split by strength state. Returns one row per team per strength. Strength labels from each team's perspective (fixed in 0.3.2). |
+| `build_shots_design_matrix(pbp_df)` | Build the feature matrix used by the xG model. |
+| `predict_xg_for_pbp(pbp_df)` | Add an `xG` column using the bundled XGBoost model. Requires `pip install scrapernhl[analytics]`. |
+| `engineer_xg_features(pbp_df)` | *(deprecated)* Feature engineering step — use `build_shots_design_matrix()` + `predict_xg_for_pbp()` instead. |
+| `pipeline(game_id)` | Convenience wrapper: scrape → parse → compute on-ice stats in one call. |
 
 ---
 

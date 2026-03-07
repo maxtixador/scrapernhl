@@ -1,6 +1,6 @@
 [project]
 name = "scrapernhl"
-version = "0.3.1"
+version = "0.3.2"
 description = "A comprehensive Python package for scraping and analyzing NHL data with built-in Expected Goals (xG) modeling"
 readme = "README.md"
 requires-python = ">=3.10"

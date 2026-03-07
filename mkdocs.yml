@@ -17,6 +17,7 @@ nav:
       - Cloud Pipeline: examples/cloud-pipeline.md
   - About: about.md
   - Announcements:
+      - Version 0.3.2: announcements/version-032.md
       - Version 0.3.0: announcements/version-030.md
       - Version 0.1.5: announcements/version-015.md
       - Version 0.1.4: announcements/version-014.md

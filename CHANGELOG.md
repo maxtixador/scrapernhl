@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.2] - 2026-03-07
+
+### Fixed
+
+- Strength labels for the alphabetically second team in analytics functions — `on_ice_stats_by_player_strength()`, `toi_by_player_and_strength()`, `combo_on_ice_stats()`, `combo_on_ice_stats_both_teams()`, and `team_strength_aggregates()` now correctly use the focus team's perspective for strength labels. Previously the second alphabetical team always received the mirror of the home team's label (e.g. `"5v4"` instead of `"4v5"` for a penalized away team killing off a penalty)
+- `urllib3` minimum version bumped to `2.0.7` (was `2.0.0`) to fix chunked HTTP response truncation causing silently incomplete PBP data
+- `pandas` dependency updated to `>=2.2.3` for NumPy 2.x compatibility
+- README: corrected PWHL's full name from "Provincial" to "Professional" (Professional Women's Hockey League)
+
 ## [0.3.1] - 2026-03-06
 
 ### Fixed
