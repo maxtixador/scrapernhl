@@ -64,9 +64,9 @@ ohl_games = scrapeGame(game_id=12345, nhlify=True)
 
 ### Complete Documentation
 
-- [Multi-League Scraper Reference](../multi-league-scraper-reference.md) - Complete API documentation
-- [Jupyter Notebooks](../../notebooks/) - Interactive examples for each league (notebooks 05-09)
-- [API Quick Reference](../api-quick-reference.md) - Fast function lookup
+- [API Reference](../api.md) - Complete API documentation
+- [Jupyter Notebooks](https://github.com/maxtixador/scrapernhl/tree/master/notebooks/) - Interactive examples for each league (notebooks 05-09)
+- [API Reference](../api.md) - Fast function lookup
 
 ## Critical Bug Fixes
 
@@ -184,8 +184,8 @@ With multi-league support established in v0.1.5, version 0.1.6 will focus on:
 ## Resources
 
 - **Documentation**: [maxtixador.github.io/scrapernhl](https://maxtixador.github.io/scrapernhl/)
-- **API Reference**: [Multi-League API](../api-quick-reference.md)
-- **Examples**: [Jupyter Notebooks](../../notebooks/)
+- **API Reference**: [API Reference](../api.md)
+- **Examples**: [Jupyter Notebooks](https://github.com/maxtixador/scrapernhl/tree/master/notebooks/)
 - **Changelog**: [CHANGELOG.md](https://github.com/maxtixador/scrapernhl/blob/master/CHANGELOG.md)
 
 ## Thank You

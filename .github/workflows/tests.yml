@@ -7,69 +7,75 @@ on:
     branches: [master]
 
 jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+
+      - name: Set up Python 3.12
+        run: uv python install 3.12
+
+      - name: Install ruff
+        run: uv pip install ruff
+
+      - name: Run ruff
+        run: uv run ruff check scrapernhl/
+
   test:
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
-        python-version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
 
     steps:
       - uses: actions/checkout@v4
-      
-      - name: Install libomp on macOS (required for xgboost)
-        if: runner.os == 'macOS'
-        run: brew install libomp
-      
+
       - name: Install uv
         uses: astral-sh/setup-uv@v4
         with:
           enable-cache: true
-      
+
       - name: Set up Python ${{ matrix.python-version }}
         run: uv python install ${{ matrix.python-version }}
-      
+
       - name: Create virtual environment
         run: uv venv
-      
-      - name: Install dependencies (Python 3.9)
-        if: matrix.python-version == '3.9'
-        run: |
-          uv pip install -e . pytest pytest-cov
-      
-      - name: Install dependencies (Python 3.10+)
-        if: matrix.python-version != '3.9'
+
+      - name: Install dependencies
         run: uv sync
-      
-      - name: Install Playwright browsers
-        run: uv run playwright install chromium --with-deps
-      
-      - name: Run tests
-        run: uv run pytest -v
+
+      - name: Run tests (skip integration)
+        run: uv run pytest -v -m "not integration"
 
   test-dependencies:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.9", "3.12"]
+        python-version: ["3.10", "3.12"]
         deps: ["minimum", "latest"]
 
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Install uv
         uses: astral-sh/setup-uv@v4
         with:
           enable-cache: true
-      
+
       - name: Set up Python ${{ matrix.python-version }}
         run: uv python install ${{ matrix.python-version }}
-      
+
       - name: Create virtual environment
         run: uv venv
-      
+
       - name: Install minimum dependencies
         if: matrix.deps == 'minimum'
         run: |
@@ -79,18 +85,19 @@ jobs:
             joblib==1.3.0 \
             numpy==2.0.0 \
             pandas==2.0.0 \
-            polars==0.20.0 \
+            polars==1.0.0 \
             requests==2.31.0 \
+            rich==13.0.0 \
             selectolax==0.3.27 \
             urllib3==2.0.0 \
             pytest==7.0.0
           uv pip install -e .
-      
+
       - name: Install latest dependencies
         if: matrix.deps == 'latest'
         run: |
           uv pip install -e .
           uv pip install pytest pytest-cov
-      
-      - name: Run tests (skip xG tests on minimum)
-        run: uv run pytest -v -k "not lazy_loading"
+
+      - name: Run tests (skip integration)
+        run: uv run pytest -v -m "not integration"

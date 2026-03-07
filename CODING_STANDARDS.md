@@ -18,15 +18,9 @@ This document defines coding standards and best practices for the ScraperNHL pro
 
 ## Python Version & Compatibility
 
-- **Minimum version**: Python 3.9
-- **Target versions**: 3.9, 3.10, 3.11, 3.12, 3.13
-- Avoid Python 3.12+ only features (e.g., new type syntax) for broader compatibility
-- Use `from __future__ import annotations` for forward compatibility
-
-```python
-from __future__ import annotations
-from typing import Optional, Union
-```
+- **Minimum version**: Python 3.10
+- **Target versions**: 3.10, 3.11, 3.12, 3.13
+- Use modern union syntax (`X | Y`, `X | None`) available since Python 3.10
 
 ---
 
@@ -52,7 +46,7 @@ We use **Ruff** for linting and formatting (modern, fast alternative to Black + 
 # pyproject.toml
 [tool.ruff]
 line-length = 100
-target-version = "py39"
+target-version = "py310"
 
 [tool.ruff.lint]
 select = [
@@ -172,7 +166,8 @@ def scrapeTeams(
 - Use `Union[T1, T2]` or `T1 | T2` for multiple possible types
 - Use `List[T]`, `Dict[K, V]`, `Set[T]` for collections
 - Use `pd.DataFrame` for DataFrames
-- Import from `typing` module for Python 3.9 compatibility
+- Use `X | Y` or `X | None` syntax directly (Python 3.10+)
+- Use `list[T]`, `dict[K, V]`, `set[T]` for collections (no `typing` import needed)
 
 ---
 

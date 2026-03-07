@@ -9,9 +9,10 @@ except PackageNotFoundError:
 
 from .client import HockeyScraper
 from .config import LeagueType
+from .core.http import fetch_raw
 from .transform import tracking_dict_to_df
 
-__all__ = ['scrape', 'HockeyScraper', 'tracking_dict_to_df']
+__all__ = ['scrape', 'HockeyScraper', 'fetch_raw', 'tracking_dict_to_df']
 
 
 # Functional API (DeepSeek style)
@@ -38,6 +39,7 @@ def scrape(league: LeagueType, data_type: str = 'pbp', **kwargs):
         'teams_by_season': scraper.teams_by_season,
         'scrape_teams': scraper.scrape_teams,
         'seasons': scraper.seasons,
+        'raw_source': scraper.raw_source,
     }
 
     if data_type not in methods:

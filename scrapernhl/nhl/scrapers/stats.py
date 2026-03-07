@@ -1,6 +1,6 @@
 """NHL team and player statistics scrapers."""
 
-from datetime import datetime
+from datetime import datetime, timezone
 
 import pandas as pd
 import polars as pl
@@ -46,7 +46,7 @@ def getTeamStatsData(
     except Exception as e:
         raise RuntimeError(f"Error fetching team stats data: {e}")
 
-    now = datetime.utcnow().isoformat()
+    now = datetime.now(timezone.utc).isoformat()
     return [
         {**record, "scrapedOn": now, "source": "NHL Team Stats API"}
         for record in data

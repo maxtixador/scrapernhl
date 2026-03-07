@@ -1,6 +1,6 @@
 [project]
 name = "scrapernhl"
-version = "3.0.0"
+version = "0.3.1"
 description = "A comprehensive Python package for scraping and analyzing NHL data with built-in Expected Goals (xG) modeling"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -42,11 +42,10 @@ dependencies = [
     "joblib>=1.3.0",
     "numpy>=2.0.0",
     "pandas>=2.0.0",
-    "polars>=0.20.0",
+    "polars>=1.0.0",
     "requests>=2.31.0",
     "rich>=13.0.0",
     "selectolax>=0.3.27",
-    "tqdm>=4.67.1",
     "urllib3>=2.0.0",
 ]
 
@@ -152,5 +151,18 @@ indent-style = "space"
 python_version = "3.10"
 warn_return_any = true
 warn_unused_configs = true
-disallow_untyped_defs = false  # Gradually enable
+disallow_untyped_defs = false  # Legacy scraper has many untyped functions; enforced per-module below
 ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = [
+    "scrapernhl.core.*",
+    "scrapernhl.nhl.scrapers.*",
+    "scrapernhl.client",
+    "scrapernhl.exceptions",
+    "scrapernhl.urls",
+    "scrapernhl.parsers",
+    "scrapernhl.transform",
+    "scrapernhl.enrichment",
+]
+disallow_untyped_defs = true

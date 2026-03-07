@@ -98,7 +98,12 @@ def parse_stats(league: str, data: dict, position: str) -> list:
 def parse_schedule(league: str, data: dict) -> list:
     if league == "nhl":
         return data.get("games", [])
-    return data[0].get("sections", [])[0].get("data", [])
+    if not isinstance(data, list) or not data:
+        return []
+    games = []
+    for section in data[0].get("sections", []):
+        games.extend(section.get("data", []))
+    return games
 
 
 def parse_roster(league: str, data: dict) -> list:

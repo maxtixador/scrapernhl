@@ -1,6 +1,6 @@
 """NHL roster data scrapers."""
 
-from datetime import datetime
+from datetime import datetime, timezone
 
 import pandas as pd
 import polars as pl
@@ -38,7 +38,7 @@ def getRosterData(team: str = "MTL", season: str | int = "20242025") -> list[dic
     except Exception as e:
         raise RuntimeError(f"Error fetching roster data: {e}")
 
-    now = datetime.utcnow().isoformat()
+    now = datetime.now(timezone.utc).isoformat()
     return [
         {**record, "scrapedOn": now, "source": "NHL Roster API"}
         for record in data

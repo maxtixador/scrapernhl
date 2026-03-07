@@ -1,7 +1,7 @@
 """NHL draft data scrapers."""
 
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 
 import pandas as pd
 import polars as pl
@@ -40,7 +40,7 @@ def getDraftData(year: str | int = "2024", round: str | int = "all") -> list[dic
     except Exception as e:
         raise RuntimeError(f"Error fetching draft data: {e}")
 
-    now = datetime.utcnow().isoformat()
+    now = datetime.now(timezone.utc).isoformat()
     return [
         {**record, "year": year, "scrapedOn": now, "source": "NHL Draft API"}
         for record in data
@@ -91,7 +91,7 @@ def getRecordsDraftData(year: str | int = "2025") -> list[dict]:
     except Exception as e:
         raise RuntimeError(f"Error fetching draft records: {e}")
 
-    now = datetime.utcnow().isoformat()
+    now = datetime.now(timezone.utc).isoformat()
     return [
         {**record, "year": year, "scrapedOn": now, "source": "NHL Draft Records API"}
         for record in data
@@ -142,7 +142,7 @@ def getRecordsTeamDraftHistoryData(franchise: str | int = 1) -> list[dict]:
     except Exception as e:
         raise RuntimeError(f"Error fetching team draft history: {e}")
 
-    now = datetime.utcnow().isoformat()
+    now = datetime.now(timezone.utc).isoformat()
     return [
         {**record, "scrapedOn": now, "source": "NHL Team Draft History API"}
         for record in data

@@ -10,7 +10,7 @@ This module provides comprehensive player data scraping including:
 All functions support caching to minimize API calls and improve performance.
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Literal
 
 import pandas as pd
@@ -54,7 +54,7 @@ def getPlayerProfile(player_id: str | int) -> dict:
             raise APIError(f"Invalid response format for player {player_id}")
 
         # Enrich with metadata
-        now = datetime.utcnow().isoformat()
+        now = datetime.now(timezone.utc).isoformat()
         response['scrapedOn'] = now
         response['source'] = 'NHL Player API'
         response['playerId'] = player_id
@@ -104,7 +104,7 @@ def getPlayerSeasonStats(
             'season': season,
             'featuredStats': response.get('featuredStats', {}),
             'careerTotals': response.get('careerTotals', {}),
-            'scrapedOn': datetime.utcnow().isoformat(),
+            'scrapedOn': datetime.now(timezone.utc).isoformat(),
             'source': 'NHL Player API'
         }
 
@@ -154,7 +154,7 @@ def getPlayerGameLog(
             games = []
 
         # Enrich with metadata
-        now = datetime.utcnow().isoformat()
+        now = datetime.now(timezone.utc).isoformat()
         enriched_games = []
         for game in games:
             if isinstance(game, dict):
@@ -344,7 +344,7 @@ def getTeamRoster(
 
         # Extract all players from forwards, defensemen, and goalies
         all_players = []
-        now = datetime.utcnow().isoformat()
+        now = datetime.now(timezone.utc).isoformat()
 
         for position_group in ['forwards', 'defensemen', 'goalies']:
             players = response.get(position_group, [])

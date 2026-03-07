@@ -53,15 +53,17 @@ def transform_pbp(
     df = _normalize_players(df, league)
     df = _normalize_coordinates(df, config)
     df = _normalize_strength(df, league)
-    df = _calculate_scores(df)
-    df = _add_metadata(df, league, game_id=game_id)
 
-    # Merge shot+goal duplicate rows for all HockeyTech leagues.
+    # Merge shot+goal duplicate rows for all HockeyTech leagues BEFORE
+    # computing cumulative scores so scores reflect the final event stream.
     # AHL/PWHL emit a separate 'goal' event even though the shot event already
     # has isGoal=True; OHL/WHL/QMJHL do the same.  nhlify=False lets callers
     # skip this step and keep both rows.
     if nhlify and league != 'nhl':
         df = nhlify_goals(df)
+
+    df = _calculate_scores(df)
+    df = _add_metadata(df, league, game_id=game_id)
 
     return df
 
@@ -80,7 +82,10 @@ def _normalize_periods(df: pd.DataFrame, league: str) -> pd.DataFrame:
         ot_map = {f"{i}{suffix.get(i, 'th')} OT": i + 3 for i in range(1, 10)}
         text_map = {"1st": 1, "2nd": 2, "3rd": 3, "OT": 4}
         period_map = {**text_map, **ot_map}
-        df['period'] = df['period'].replace(period_map)
+        # map() maps matched text values to ints; fillna() restores unmapped
+        # (already-numeric period_id values), avoiding the FutureWarning that
+        # replace() emits when it silently downcasts object→int.
+        df['period'] = df['period'].map(period_map).fillna(df['period'])
 
         # Fill NaN period from period_id (present in most event types)
         if 'period_id' in df.columns:
@@ -97,7 +102,7 @@ def _normalize_periods(df: pd.DataFrame, league: str) -> pd.DataFrame:
         )
         # PWHL / AHL send OT periods as "OT1", "OT2", …
         ot_map = {f"OT{i}": i + 3 for i in range(1, 10)}
-        df['period'] = df['period'].replace(ot_map)
+        df['period'] = df['period'].map(ot_map).fillna(df['period'])
 
     # Convert to numeric
     df['period'] = pd.to_numeric(df['period'], errors='coerce')
@@ -340,7 +345,10 @@ def nhlify_goals(df: pd.DataFrame) -> pd.DataFrame:  # ✅ Correct function name
             "shot_distance_ft", "shot_angle_deg",
         ]
 
-        for shot_idx, goal_idx in zip(shot_indices, goal_indices, strict=False):
+        merged_shot_indices = []
+        for shot_idx, goal_idx in zip(
+            shot_indices, goal_indices, strict=False
+        ):
             if goal_idx >= len(df):
                 continue
             # Guard: after sorting, the next row should be the goal, but
@@ -348,33 +356,28 @@ def nhlify_goals(df: pd.DataFrame) -> pd.DataFrame:  # ✅ Correct function name
             # time_seconds could shift the assumed adjacency).
             if df.at[goal_idx, 'event'] != 'goal':
                 continue
+            # Guard: only merge if both events belong to the same team.
+            # A missed shot and an unrelated goal can coincide at the same
+            # second; the 'home' flag (1=home, 0=away) disambiguates them.
+            if 'home' in df.columns:
+                shot_home = df.at[shot_idx, 'home']
+                goal_home = df.at[goal_idx, 'home']
+                if (pd.notna(shot_home) and pd.notna(goal_home)
+                        and str(shot_home) != str(goal_home)):
+                    continue
             for col in shot_cols:
                 if col in df.columns:
-                    if pd.isna(df.at[goal_idx, col]) and pd.notna(df.at[shot_idx, col]):
+                    if (pd.isna(df.at[goal_idx, col])
+                            and pd.notna(df.at[shot_idx, col])):
                         df.at[goal_idx, col] = df.at[shot_idx, col]
+            merged_shot_indices.append(shot_idx)
 
-        # Remove redundant shot rows
-        df = df.drop(index=shot_indices).reset_index(drop=True)
+        # Remove only shot rows that were successfully merged
+        if merged_shot_indices:
+            df = df.drop(index=merged_shot_indices).reset_index(drop=True)
 
     # Cleanup
     df = df.drop(columns=["_next_event", "_next_time"], errors="ignore")
-
-    # Validate: if any shot+goal pairs still coexist at the same (period,
-    # time_seconds), the merge failed — the data format is incompatible.
-    shot_mask = df["event"].isin(["shot", "penaltyshot"])
-    goal_mask = df["event"] == "goal"
-    if shot_mask.any() and goal_mask.any() and "time_seconds" in df.columns:
-        key_cols = [c for c in ["period", "time_seconds"] if c in df.columns]
-        shot_keys = set(df.loc[shot_mask, key_cols].dropna().itertuples(index=False, name=None))
-        goal_keys = set(df.loc[goal_mask, key_cols].dropna().itertuples(index=False, name=None))
-        unmerged = shot_keys & goal_keys
-        if unmerged:
-            raise ValueError(
-                f"nhlify_goals failed: {len(unmerged)} goal(s) could not be merged with "
-                f"their preceding shot (shot+goal pairs still present at the same time). "
-                f"The data format for this game may be incompatible with automatic merging. "
-                f"Re-scrape with nhlify=False to get the raw event rows."
-            )
 
     return df
 

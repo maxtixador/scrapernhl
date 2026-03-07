@@ -217,6 +217,10 @@ def add_on_event_shift_start_qualifiers(
         pbp[pbp_type_col].eq(faceoff_type_value),
         faceoff_cols
     ].copy()
+    # Deduplicate so each (game, period, second) maps to at most one faceoff.
+    # Without this, a left merge on a duplicate timestamp would expand ON events
+    # to multiple rows, making .values assignment in the caller length-mismatch.
+    f = f.drop_duplicates(subset=[game_col, period_col, pbp_time_col], keep="first")
 
     # Check if on_events already has coordinate columns
     # If so, we need to handle suffix collision

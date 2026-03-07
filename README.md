@@ -3,7 +3,7 @@
 **Scrape and analyze hockey data from 6 leagues with one unified API.**
 
 [![PyPI version](https://img.shields.io/pypi/v/scrapernhl)](https://pypi.org/project/scrapernhl/)
-[![Python](https://img.shields.io/badge/python-3.9%2B-blue)](https://www.python.org/downloads/)
+[![Python](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Docs](https://img.shields.io/badge/docs-mkdocs-blue)](https://maxtixador.github.io/scrapernhl/)
 
@@ -17,7 +17,7 @@ NHL support goes further with an advanced analytics pipeline: time-on-ice matric
 
 | League | Key | Season format | Current season |
 |--------|-----|---------------|----------------|
-| National Hockey League | `nhl` | `YYYYYYYY` | `20232024` |
+| National Hockey League | `nhl` | `YYYYYYYY` | `20252026` |
 | American Hockey League | `ahl` | integer | `90` |
 | Provincial Women's Hockey League | `pwhl` | integer | `8` |
 | Ontario Hockey League | `ohl` | integer | `83` |
@@ -40,7 +40,7 @@ cd scrapernhl
 pip install -e .
 ```
 
-**Requirements:** Python 3.9+, pandas, numpy, requests, beautifulsoup4, selectolax
+**Requirements:** Python 3.10+, pandas, numpy, requests, beautifulsoup4, selectolax
 
 ---
 
@@ -233,22 +233,27 @@ shift_events = nhl.build_shifts_events(shifts)
 
 ```bash
 # Play-by-play
-scrapernhl ahl   pbp --game-id 1027781     --output game.csv
-scrapernhl nhl   pbp --game-id 2023020001  --output nhl_game.json
+scrapernhl ahl   game 1027781              --output game.csv
+scrapernhl game  2023020001               --output nhl_game.json
 
-# Player stats
-scrapernhl ahl   stats --season 90 --position skaters --output stats.csv
-scrapernhl ohl   stats --season 83 --position goalies --output goalies.json
+# Player stats (non-NHL)
+scrapernhl ahl   stats --season 90 --player-type skater  --output stats.csv
+scrapernhl ohl   stats --season 83 --player-type goalie  --output goalies.json
+
+# NHL player stats (top-level command, requires team + season)
+scrapernhl stats MTL 20252026            --output mtl_skaters.csv
+scrapernhl stats MTL 20252026 --goalies  --output mtl_goalies.csv
 
 # Schedule
-scrapernhl whl   schedule --season 289 --output schedule.csv
+scrapernhl whl   schedule --season 289   --output schedule.csv
+scrapernhl schedule MTL 20252026         --output nhl_schedule.csv
 
 # Standings
-scrapernhl nhl   standings --output standings.csv
-scrapernhl qmjhl standings --season 211 --output standings.json
+scrapernhl standings                     --output standings.csv
+scrapernhl qmjhl standings --season 211  --output standings.json
 
 scrapernhl --help
-scrapernhl nhl --help
+scrapernhl ahl --help
 ```
 
 ---
@@ -285,7 +290,7 @@ pytest tests/test_client.py::TestNHLAnalytics -v
 pytest tests/test_client.py::TestPlayByPlay -v
 ```
 
-232 tests cover all 6 leagues across: instantiation, bootstrap accessors, play-by-play, player stats (skaters + goalies), schedules, rosters, standings, teams, seasons, batch scraping, all NHL-specific methods, the full analytics pipeline, and the `scrape()` functional API.
+717 tests cover all 6 leagues across: instantiation, bootstrap accessors, play-by-play, player stats (skaters + goalies), schedules, rosters, standings, teams, seasons, batch scraping, all NHL-specific methods, the full analytics pipeline, and the `scrape()` functional API.
 
 ---
 

@@ -7,6 +7,65 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-03-06
+
+### Fixed
+
+- `gameStrength` on ON/OFF shift events was always from the home team's perspective; now uses the changing player's team perspective (`"4v5"` for an away player killed off, not `"5v4"`)
+- `home_strength` and `away_strength` PBP columns were swapped for away-team events (contained the away team's value and home team's value respectively); now always reflect the actual home and away team regardless of which team owns the event
+- `parse_schedule` raised `IndexError` when the API returned a response with empty sections (e.g. a team with no scheduled games in the requested season)
+- Zone start qualifier assignment in `scrape_game` could crash with a pandas length-mismatch error when two faceoff events shared the exact same elapsed second in the same period; faceoffs are now deduplicated before the merge
+
+## [0.3.0] - 2026-03-05
+
+This is a major rewrite. The package is now a single unified client for all six leagues with a clean, consistent API.
+
+### Added
+- **Unified `HockeyScraper` client** — one class for all six leagues (`nhl`, `ahl`, `pwhl`, `ohl`, `whl`, `qmjhl`) via `from scrapernhl import HockeyScraper`
+- **`scrape()` functional API** — top-level one-liner: `scrape('ahl', 'pbp', game_id=1027781)`
+- **Parse → transform → enrich pipeline** — `parsers.py`, `transform.py`, `urls.py`, `utils.py`, `enrichment.py` as the internal supporting layer
+- **`url_for(data_type, **kwargs)`** — inspect the URL for any endpoint without making a network request
+- **`fetch_raw(data_type, **kwargs)`** — return the unprocessed API response, bypassing all parsing
+- **`endpoints.md`** — wire-format API reference documenting every URL, parameter, and response shape for all six leagues
+- **GitHub Actions CI** — ruff lint + pytest on Python 3.10, 3.11, and 3.12 on every push and PR; integration tests skipped in CI
+- **New unified notebooks** — `01_getting_started.ipynb`, `02_nhl_data.ipynb`, `03_other_leagues.ipynb`, `04_advanced_features.ipynb`
+- **`api_notebook.ipynb`** — comprehensive, runnable API reference notebook covering every public method
+- **Comprehensive pytest suites** — `test_client.py`, `test_endpoints.py`, `test_all_non_nhl_leagues.py` (501 tests)
+- **`tracking_dict_to_df(frames)`** exported at top level — converts goal-replay sprite frames to a tidy DataFrame with rink coordinates
+
+### Changed
+- **Minimum Python version raised to 3.10** (was 3.9)
+- **Optional dependencies restructured** — `xgboost`, `seaborn`, `jupyterlab`, and `playwright` moved out of the default install into `[analytics]` and `[notebooks]` extras; `pip install scrapernhl` now installs ~50 MB instead of ~650 MB
+- **CLI unified** — single `scrapernhl <league> <data_type> [options]` interface replaces the old league-specific subcommand structure
+- **Bootstrap data lazy-loaded** — non-NHL scrapers fetch bootstrap on first access rather than eagerly on init, improving cold-start time
+
+### Removed
+- All league-specific top-level modules (`scrapernhl.ahl`, `scrapernhl.pwhl`, `scrapernhl.ohl`, `scrapernhl.whl`, `scrapernhl.qmjhl`) — use `HockeyScraper('<league>')` instead
+- `engineer_xg_features()` and `predict_xg()` — use `on_ice_stats()` and `team_strength_aggregates()` directly on the PBP DataFrame
+- Visualization module (`visualization.py`)
+- Old league-specific notebooks (01–10 in `archive/`)
+
+### Migration Guide
+```python
+# 0.1.x (old)
+from scrapernhl.ahl.scrapers import scrapeSkaterStats, scrapeStandings
+from scrapernhl.nhl.scraper import scrapeGame
+
+stats     = scrapeSkaterStats(season=90)
+standings = scrapeStandings()
+game      = scrapeGame(2023020001, include_tuple=True)
+
+# 0.3.0 (new)
+from scrapernhl import HockeyScraper
+
+ahl = HockeyScraper('ahl')
+nhl = HockeyScraper('nhl')
+
+stats     = ahl.player_stats(season=90, position='skaters')
+standings = ahl.standings()
+game      = nhl.scrape_game(2023020001)
+```
+
 ## [0.1.5] - 2026-01-11
 
 ### Fixed
@@ -98,7 +157,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Basic player stats
 - Python API and CLI interface
 
-[Unreleased]: https://github.com/maxtixador/scrapernhl/compare/v0.1.5...HEAD
+[Unreleased]: https://github.com/maxtixador/scrapernhl/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/maxtixador/scrapernhl/compare/v0.1.5...v0.3.0
 [0.1.5]: https://github.com/maxtixador/scrapernhl/compare/v0.1.4...v0.1.5
 [0.1.4]: https://github.com/maxtixador/scrapernhl/compare/v0.1.3...v0.1.4
 [0.1.3]: https://github.com/maxtixador/scrapernhl/compare/v0.1.2...v0.1.3

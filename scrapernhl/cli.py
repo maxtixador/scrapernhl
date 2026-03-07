@@ -14,7 +14,7 @@ import click
 
 
 @click.group()
-@click.version_option(version="0.1.5", prog_name="scrapernhl")
+@click.version_option(package_name="scrapernhl", prog_name="scrapernhl")
 def cli():
     """
     ScraperNHL - Command-line interface for multi-league hockey data scraping.

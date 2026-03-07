@@ -7,6 +7,7 @@ from typing import Literal
 import pandas as pd
 
 from .config import CACHE_TTL, LEAGUES, LeagueType
+from .core.logging_config import get_logger
 from .enrichment import enrich_roster, enrich_schedule, enrich_standings, enrich_stats
 from .parsers import (
     parse_pbp,
@@ -19,16 +20,31 @@ from .parsers import (
 from .transform import transform_pbp
 from .urls import (
     build_bootstrap_url,
+    build_nhl_club_stats_url,
+    build_nhl_draft_picks_url,
+    build_nhl_franchise_url,
+    build_nhl_html_pbp_url,
+    build_nhl_html_shifts_home_url,
+    build_nhl_html_shifts_visitor_url,
     build_nhl_player_game_log_url,
     build_nhl_player_landing_url,
+    build_nhl_records_draft_url,
+    build_nhl_records_franchise_url,
+    build_nhl_records_team_draft_history_url,
+    build_nhl_schedule_calendar_url,
+    build_nhl_seasons_url,
+    build_nhl_standings_url,
     build_pbp_url,
     build_player_page_url,
     build_roster_url,
     build_schedule_url,
     build_standings_url,
     build_stats_url,
+    build_teams_by_season_url,
 )
 from .utils import Cache, RateLimiter, clean_jsonp, get_session, validate_game_id
+
+LOG = get_logger(__name__)
 
 
 class HockeyScraper:
@@ -57,7 +73,7 @@ class HockeyScraper:
         ) if self.league != 'nhl' else None
 
         # Bootstrap data is fetched lazily on first access (non-NHL only)
-        self.bootstrap_data: dict | None = None
+        self._bootstrap_data: dict | None = None
         # Lazily populated for QMJHL/WHL which don't expose playoff seasons in bootstrap
         self._extra_seasons: list[dict] | None = None
 
@@ -88,13 +104,23 @@ class HockeyScraper:
     # ========================================================================
 
     @property
+    def bootstrap_data(self) -> dict | None:
+        """Full bootstrap response dict (lazy-fetched on first access for non-NHL leagues)."""
+        if self._bootstrap_data is None and self.league != 'nhl':
+            self._bootstrap_data = self._fetch_bootstrap_on_init()
+        return self._bootstrap_data
+
+    @bootstrap_data.setter
+    def bootstrap_data(self, value: dict | None) -> None:
+        self._bootstrap_data = value
+
+    @property
     def _bootstrap(self) -> dict:
         """Safe access to the current league's bootstrap subtree (lazy-fetched for non-NHL)."""
-        if self.bootstrap_data is None and self.league != 'nhl':
-            self.bootstrap_data = self._fetch_bootstrap_on_init()
-        if not self.bootstrap_data:
+        data = self.bootstrap_data
+        if not data:
             return {}
-        return self.bootstrap_data.get(self.league, self.bootstrap_data)
+        return data.get(self.league, data)
 
     @property
     def teams(self) -> list:
@@ -240,6 +266,19 @@ class HockeyScraper:
         except Exception:
             return self._bootstrap
 
+    def _stamp(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Add lineage columns (scraped_at, league) to any silver-layer DataFrame.
+
+        Called at the end of every data method that returns a DataFrame.
+        PBP already gets these columns from transform._add_metadata().
+        """
+        from datetime import datetime, timezone
+        if 'scraped_at' not in df.columns:
+            df['scraped_at'] = datetime.now(timezone.utc).isoformat()
+        if 'league' not in df.columns:
+            df['league'] = self.league
+        return df
+
     # ========================================================================
     # Core Methods
     # ========================================================================
@@ -309,7 +348,7 @@ class HockeyScraper:
             season_bootstrap = self._get_season_bootstrap(season)
             df = enrich_stats(df, season_bootstrap, season, self.league)
 
-        return df
+        return self._stamp(df)
 
     def schedule(self, team: str = 'all', season: int | None = None, raw: bool = False, **filters) -> pd.DataFrame | dict:
         """Get team schedule.
@@ -332,7 +371,7 @@ class HockeyScraper:
             df = self._format_hockeytech_schedule(df)
             df = enrich_schedule(df, season_bootstrap, season, self.league)
 
-        return df
+        return self._stamp(df)
 
     def roster(self, team: str, season: int | None = None, raw: bool = False) -> pd.DataFrame | dict:
         """Get team roster.
@@ -363,7 +402,7 @@ class HockeyScraper:
             season_bootstrap = self._get_season_bootstrap(season)
             df = enrich_roster(df, season_bootstrap, season, self.league, team)
 
-        return df
+        return self._stamp(df)
 
     def standings(self, season: int | None = None, raw: bool = False, **filters) -> pd.DataFrame | dict:
         """Get league standings.
@@ -385,7 +424,7 @@ class HockeyScraper:
             season_bootstrap = self._get_season_bootstrap(season)
             df = enrich_standings(df, season_bootstrap, season, self.league)
 
-        return df
+        return self._stamp(df)
 
     def player_profile(self, player_id: int, season: int | None = None, stats_type: str = "standard", raw: bool = False) -> dict:
         """Get a player's profile page from the HockeyTech API (non-NHL only).
@@ -421,15 +460,13 @@ class HockeyScraper:
         """Return the URL that would be fetched for a given data type.
 
         Useful for debugging, curl inspection, or building custom HTTP requests.
-
-        Parameters:
-        - data_type: One of 'pbp', 'stats', 'schedule', 'roster', 'standings',
-          'bootstrap', 'scorebar', 'player_profile' (NHL), 'player_game_log' (NHL)
-        - **kwargs: Same keyword arguments as the corresponding scraper method
+        See _build_url for the full list of supported data_type values.
 
         Examples:
             scraper.url_for('pbp', game_id=2023020001)
             scraper.url_for('standings', season=90)
+            scraper.url_for('html_pbp', game_id=2023020001)
+            scraper.url_for('draft', year=2024, round=1)
             scraper.url_for('player_game_log', player_id=8478402, season=20232024)
         """
         return self._build_url(data_type, **kwargs)
@@ -438,17 +475,16 @@ class HockeyScraper:
         """Fetch the raw API response dict for a given data type, bypassing all parsing.
 
         Returns the unprocessed JSON exactly as the API sends it, with caching
-        and rate limiting still applied. Use url_for() to inspect the URL first.
+        and rate limiting still applied. Use url_for() to inspect the URL first,
+        or raw_source() to bypass the cache and get the true wire payload.
 
-        Parameters:
-        - data_type: One of 'pbp', 'stats', 'schedule', 'roster', 'standings',
-          'bootstrap', 'scorebar', 'player_profile' (NHL), 'player_game_log' (NHL)
-        - **kwargs: Same keyword arguments as the corresponding scraper method
+        See _build_url for the full list of supported data_type values.
 
         Examples:
             scraper.fetch_raw('pbp', game_id=2023020001)
             scraper.fetch_raw('player_profile', player_id=8478402)
             scraper.fetch_raw('standings', season=90, context='home')
+            scraper.fetch_raw('team_stats', team='MTL', season=20252026)
         """
         url = self._build_url(data_type, **kwargs)
         return self._fetch(url, cache_ttl=0)
@@ -531,7 +567,7 @@ class HockeyScraper:
         df = pd.json_normalize(records)
         df['source'] = source
         df['league'] = self.league
-        return df
+        return self._stamp(df)
 
     def teams_by_season(self, season: int | None = None, raw: bool = False) -> pd.DataFrame | dict | list:
         """Get teams for a specific season.
@@ -550,7 +586,7 @@ class HockeyScraper:
             df = pd.json_normalize(data.get('standings', []))
             df['season'] = str(season)
             df['league'] = self.league
-            return df
+            return self._stamp(df)
 
         season_bootstrap = self._get_season_bootstrap(season)
         if raw:
@@ -559,7 +595,7 @@ class HockeyScraper:
         df = pd.json_normalize(teams)
         df['season'] = str(season)
         df['league'] = self.league
-        return df
+        return self._stamp(df)
 
     def seasons(self, season_type: Literal["all", "regular", "playoff"] = "all", raw: bool = False) -> pd.DataFrame | dict | list:
         """Get seasons data for the league.
@@ -575,14 +611,14 @@ class HockeyScraper:
                 return data
             df = pd.json_normalize(data.get('data', []))
             df['league'] = self.league
-            return df
+            return self._stamp(df)
 
         if raw:
             return self.bootstrap_data or {}
         seasons_list = self.get_seasons(season_type)
         df = pd.json_normalize(seasons_list)
         df['league'] = self.league
-        return df
+        return self._stamp(df)
 
     # ========================================================================
     # Bootstrap / Configuration
@@ -614,7 +650,7 @@ class HockeyScraper:
                 df = self.play_by_play(game_id, **kwargs)
                 dfs.append(df)
             except Exception as e:
-                print(f"Failed to scrape game {game_id}: {e}")
+                LOG.warning(f"Failed to scrape game {game_id}: {e}")
         return pd.concat(dfs, ignore_index=True) if dfs else pd.DataFrame()
 
     # ========================================================================
@@ -1140,8 +1176,21 @@ class HockeyScraper:
 
         return data
 
-    def _build_url(self, data_type: str, **kwargs) -> str:
-        """Build a URL for the given data_type. Used by url_for() and fetch_raw()."""
+    def _build_url(self, data_type: str, **kwargs) -> str:  # noqa: PLR0912
+        """Build a URL for the given data_type. Used by url_for(), fetch_raw(), and raw_source().
+
+        Supported data_type values (all leagues unless noted):
+            pbp, stats, schedule, roster, standings, bootstrap/scorebar,
+            player_profile, player_game_log (NHL),
+            teams (NHL, source='calendar'|'franchise'|'records'),
+            teams_by_season, seasons,
+            html_pbp (NHL), shifts_home (NHL), shifts_away (NHL),
+            standings_by_date (NHL, date='YYYY-MM-DD'),
+            team_stats (NHL, team=, season=, session=),
+            draft (NHL, year=, round=),
+            draft_records (NHL, year=),
+            team_draft_history (NHL, franchise=).
+        """
         season = kwargs.get('season', self.config.default_season)
         match data_type:
             case 'pbp':
@@ -1173,13 +1222,187 @@ class HockeyScraper:
                     kwargs.get('stats_type', 'standard'),
                 )
             case 'player_game_log':
+                self._nhl_only('player_game_log')
                 return build_nhl_player_game_log_url(
                     kwargs['player_id'],
                     kwargs.get('season', self.config.default_season),
                     kwargs.get('game_type', 2),
                 )
+            # ----------------------------------------------------------------
+            # NHL + non-NHL team / season discovery
+            # ----------------------------------------------------------------
+            case 'teams':
+                self._nhl_only('teams')
+                source = kwargs.get('source', 'calendar')
+                if source == 'franchise':
+                    return build_nhl_franchise_url()
+                if source == 'records':
+                    return build_nhl_records_franchise_url()
+                return build_nhl_schedule_calendar_url()  # 'calendar' (default)
+            case 'teams_by_season':
+                if self.league == 'nhl':
+                    return build_teams_by_season_url(self.config, season)
+                # Non-NHL: bootstrap carries team list for the season
+                return build_bootstrap_url(
+                    self.config,
+                    game_id=None,
+                    season=season,
+                    page_name='scorebar',
+                )
+            case 'seasons':
+                if self.league == 'nhl':
+                    return build_nhl_seasons_url()
+                return build_bootstrap_url(
+                    self.config,
+                    game_id=None,
+                    season='latest',
+                    page_name='scorebar',
+                )
+            # ----------------------------------------------------------------
+            # NHL-only HTML reports
+            # ----------------------------------------------------------------
+            case 'html_pbp':
+                self._nhl_only('html_pbp')
+                return build_nhl_html_pbp_url(str(kwargs['game_id']))
+            case 'shifts_home':
+                self._nhl_only('shifts_home')
+                return build_nhl_html_shifts_home_url(str(kwargs['game_id']))
+            case 'shifts_away':
+                self._nhl_only('shifts_away')
+                return build_nhl_html_shifts_visitor_url(str(kwargs['game_id']))
+            # ----------------------------------------------------------------
+            # NHL-only JSON endpoints
+            # ----------------------------------------------------------------
+            case 'standings_by_date':
+                self._nhl_only('standings_by_date')
+                from datetime import datetime as _dt
+                date = kwargs.get('date', _dt.now().strftime('%Y-%m-%d'))
+                return build_nhl_standings_url(date)
+            case 'team_stats':
+                self._nhl_only('team_stats')
+                return build_nhl_club_stats_url(
+                    kwargs['team'],
+                    kwargs.get('season', self.config.default_season),
+                    kwargs.get('session', 2),
+                )
+            case 'draft':
+                self._nhl_only('draft')
+                return build_nhl_draft_picks_url(
+                    kwargs.get('year', 2024),
+                    kwargs.get('round', 1),
+                )
+            case 'draft_records':
+                self._nhl_only('draft_records')
+                return build_nhl_records_draft_url(kwargs.get('year', 2025))
+            case 'team_draft_history':
+                self._nhl_only('team_draft_history')
+                return build_nhl_records_team_draft_history_url(kwargs.get('franchise', 1))
             case _:
-                raise ValueError(f"Unknown data_type '{data_type}'.")
+                raise ValueError(
+                    f"Unknown data_type '{data_type}'. "
+                    "See _build_url docstring for supported values."
+                )
+
+    def raw_source(self, endpoint: str, **kwargs) -> dict:
+        """Fetch the raw HTTP response for bronze-layer (source-of-truth) storage.
+
+        Returns the unmodified wire payload from the source API, bypassing the
+        cache and all parsing / transformation.  Store the result as-is in a
+        bronze database; apply transformations in the silver layer later.
+
+        Parameters:
+        - endpoint: Any endpoint supported by _build_url — see its docstring for
+          the full list: 'pbp', 'stats', 'schedule', 'roster', 'standings',
+          'bootstrap', 'player_profile', 'player_game_log', 'teams',
+          'teams_by_season', 'seasons', 'html_pbp', 'shifts' (returns home+away),
+          'standings_by_date', 'team_stats', 'draft', 'draft_records',
+          'team_draft_history'.  Pass 'shifts_home'/'shifts_away' to fetch a
+          single HTML report instead of both.
+        - **kwargs: Same keyword arguments as the corresponding data method.
+
+        Returns:
+        - dict with keys:
+            url (str): Source URL (list[str] for 'shifts')
+            raw_text (str): Unmodified wire body — JSON, JSONP, or HTML
+            scraped_at (str): ISO-8601 UTC timestamp
+            content_type (str): Content-Type response header
+            status_code (int): HTTP status code
+            league (str): League code
+            endpoint (str): Endpoint name
+          For 'shifts', returns a dict with 'home' and 'away' sub-records
+          instead of a flat structure.
+
+        Examples:
+            # All leagues — PBP bronze record
+            >>> rec = HockeyScraper('ahl').raw_source('pbp', game_id=1027781)
+            >>> rec['raw_text']   # raw JSONP string, untouched
+
+            # NHL JSON API
+            >>> rec = HockeyScraper('nhl').raw_source('standings_by_date', date='2026-03-01')
+            >>> rec = HockeyScraper('nhl').raw_source('draft', year=2024, round=1)
+            >>> rec = HockeyScraper('nhl').raw_source('team_stats', team='MTL', season=20252026)
+
+            # NHL HTML reports
+            >>> rec = HockeyScraper('nhl').raw_source('html_pbp', game_id=2023020001)
+            >>> shifts = HockeyScraper('nhl').raw_source('shifts', game_id=2023020001)
+            >>> shifts['home']['raw_text']  # home HTML shift report
+            >>> shifts['away']['raw_text']  # away HTML shift report
+        """
+        from datetime import datetime, timezone
+
+        now = datetime.now(timezone.utc).isoformat()
+
+        # 'shifts' is a special case: two separate HTML pages (home + away)
+        if endpoint == 'shifts':
+            self._nhl_only('shifts')
+            home_url = build_nhl_html_shifts_home_url(str(kwargs['game_id']))
+            away_url = build_nhl_html_shifts_visitor_url(str(kwargs['game_id']))
+            if self.limiter:
+                self.limiter.wait()
+            home_resp = self.session.get(home_url, timeout=30)
+            home_resp.raise_for_status()
+            if self.limiter:
+                self.limiter.wait()
+            away_resp = self.session.get(away_url, timeout=30)
+            away_resp.raise_for_status()
+            return {
+                "home": {
+                    "url": home_url,
+                    "raw_text": home_resp.text,
+                    "scraped_at": now,
+                    "content_type": home_resp.headers.get("Content-Type", ""),
+                    "status_code": home_resp.status_code,
+                },
+                "away": {
+                    "url": away_url,
+                    "raw_text": away_resp.text,
+                    "scraped_at": now,
+                    "content_type": away_resp.headers.get("Content-Type", ""),
+                    "status_code": away_resp.status_code,
+                },
+                "league": self.league,
+                "endpoint": endpoint,
+                "game_id": kwargs.get('game_id'),
+                "scraped_at": now,
+            }
+
+        url = self._build_url(endpoint, **kwargs)
+
+        if self.limiter:
+            self.limiter.wait()
+
+        resp = self.session.get(url, timeout=30)
+        resp.raise_for_status()
+
+        return {
+            "url": url,
+            "raw_text": resp.text,
+            "scraped_at": now,
+            "content_type": resp.headers.get("Content-Type", ""),
+            "status_code": resp.status_code,
+            "league": self.league,
+            "endpoint": endpoint,
+        }
 
     def _format_hockeytech_schedule(self, df: pd.DataFrame) -> pd.DataFrame:
         """Rename raw HockeyTech schedule columns to consistent names."""

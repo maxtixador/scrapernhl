@@ -1,7 +1,7 @@
 """NHL game and play-by-play data scrapers."""
 
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from functools import lru_cache
 
 import pandas as pd
@@ -65,7 +65,7 @@ def getGameData(game: str | int, addGoalReplayData: bool = False) -> dict:
     """
     game = str(game)
     url = f"https://api-web.nhle.com/v1/gamecenter/{game}/play-by-play"
-    now = datetime.utcnow().isoformat()
+    now = datetime.now(timezone.utc).isoformat()
     data = {}
 
     try:

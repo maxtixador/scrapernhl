@@ -76,8 +76,12 @@ def enrich_stats(df: pd.DataFrame, season_bootstrap: dict, season: int, league: 
     if "name" in df.columns:
         df = _split_name(df)
         df["playerName"] = df["name"]
-    df["teamId"] = df["team_code"].map(lambda x: teams_dict.get(x, {}).get("id"))
-    df["teamLogo"] = df["team_code"].map(lambda x: teams_dict.get(x, {}).get("logo"))
+    if "team_code" in df.columns:
+        df["teamId"] = df["team_code"].map(lambda x: teams_dict.get(x, {}).get("id"))
+        df["teamLogo"] = df["team_code"].map(lambda x: teams_dict.get(x, {}).get("logo"))
+    else:
+        df["teamId"] = None
+        df["teamLogo"] = None
     df["season"] = str(season)
     df["league"] = league
     df["seasonName"] = season_name
@@ -140,14 +144,26 @@ def enrich_schedule(df: pd.DataFrame, season_bootstrap: dict, season: int, leagu
         season_start_year = None
     season_end_year: str | None = str(season_start_year + 1) if season_start_year else None
 
-    df["homeTeam"] = df["homeId"].map(lambda x: teams_dict.get(x, {}).get("name"))
-    df["awayTeam"] = df["awayId"].map(lambda x: teams_dict.get(x, {}).get("name"))
-    df["homeCode"] = df["homeId"].map(lambda x: teams_dict.get(x, {}).get("team_code"))
-    df["awayCode"] = df["awayId"].map(lambda x: teams_dict.get(x, {}).get("team_code"))
-    df["homeDivision"] = df["homeId"].map(lambda x: teams_dict.get(x, {}).get("division_id"))
-    df["awayDivision"] = df["awayId"].map(lambda x: teams_dict.get(x, {}).get("division_id"))
-    df["homeLogo"] = df["homeId"].map(lambda x: teams_dict.get(x, {}).get("logo"))
-    df["awayLogo"] = df["awayId"].map(lambda x: teams_dict.get(x, {}).get("logo"))
+    if "homeId" in df.columns:
+        df["homeTeam"] = df["homeId"].map(lambda x: teams_dict.get(x, {}).get("name"))
+        df["homeCode"] = df["homeId"].map(lambda x: teams_dict.get(x, {}).get("team_code"))
+        df["homeDivision"] = df["homeId"].map(lambda x: teams_dict.get(x, {}).get("division_id"))
+        df["homeLogo"] = df["homeId"].map(lambda x: teams_dict.get(x, {}).get("logo"))
+    else:
+        df["homeTeam"] = None
+        df["homeCode"] = None
+        df["homeDivision"] = None
+        df["homeLogo"] = None
+    if "awayId" in df.columns:
+        df["awayTeam"] = df["awayId"].map(lambda x: teams_dict.get(x, {}).get("name"))
+        df["awayCode"] = df["awayId"].map(lambda x: teams_dict.get(x, {}).get("team_code"))
+        df["awayDivision"] = df["awayId"].map(lambda x: teams_dict.get(x, {}).get("division_id"))
+        df["awayLogo"] = df["awayId"].map(lambda x: teams_dict.get(x, {}).get("logo"))
+    else:
+        df["awayTeam"] = None
+        df["awayCode"] = None
+        df["awayDivision"] = None
+        df["awayLogo"] = None
     df["season"] = str(season)
     df["league"] = league
     df["seasonName"] = season_name
@@ -155,28 +171,29 @@ def enrich_schedule(df: pd.DataFrame, season_bootstrap: dict, season: int, leagu
     df["seasonStartYear"] = season_start_year
     df["seasonEndYear"] = season_end_year
 
-    df["dayOfWeek"] = df["date"].map(lambda x: x[:3] if x else None)
-    df["monthText"] = df["date"].map(lambda x: x[5:8] if x else None)
-    df["monthNum"] = df["monthText"].map(month_mapping)
-    df["day"] = df["date"].map(lambda x: x.split()[-1].zfill(2) if x else None)
-    df["year"] = df["monthText"].map(
-        lambda x: season_start_year
-        if x in month_start_end_mapping.get("seasonStartYear", {})
-        else season_end_year
-    )
-    df = df.rename(columns={"date": "dateString"})
-    df["date"] = pd.to_datetime(
-        df.apply(
-            lambda row: (
-                f"{row['year']}-{row['monthNum']}-{row['day']}"
-                if row["year"] and row["monthNum"] and row["day"]
-                else None
+    if "date" in df.columns:
+        df["dayOfWeek"] = df["date"].map(lambda x: x[:3] if x else None)
+        df["monthText"] = df["date"].map(lambda x: x[5:8] if x else None)
+        df["monthNum"] = df["monthText"].map(month_mapping)
+        df["day"] = df["date"].map(lambda x: x.split()[-1].zfill(2) if x else None)
+        df["year"] = df["monthText"].map(
+            lambda x: season_start_year
+            if x in month_start_end_mapping.get("seasonStartYear", {})
+            else season_end_year
+        )
+        df = df.rename(columns={"date": "dateString"})
+        df["date"] = pd.to_datetime(
+            df.apply(
+                lambda row: (
+                    f"{row['year']}-{row['monthNum']}-{row['day']}"
+                    if row["year"] and row["monthNum"] and row["day"]
+                    else None
+                ),
+                axis=1,
             ),
-            axis=1,
-        ),
-        errors="coerce",
-        format="%Y-%m-%d",
-    )
+            errors="coerce",
+            format="%Y-%m-%d",
+        )
     return df
 
 

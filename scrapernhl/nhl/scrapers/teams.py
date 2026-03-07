@@ -1,6 +1,6 @@
 """NHL team data scrapers."""
 
-from datetime import datetime
+from datetime import datetime, timezone
 
 import pandas as pd
 import polars as pl
@@ -57,7 +57,7 @@ def getTeamsData(source: str = "calendar") -> list[dict]:
     except Exception as e:
         raise RuntimeError(f"Error fetching data from {source}: {e}")
 
-    now = datetime.utcnow().isoformat()
+    now = datetime.now(timezone.utc).isoformat()
     return [
         {**record, "scrapedOn": now, "source": source}
         for record in data

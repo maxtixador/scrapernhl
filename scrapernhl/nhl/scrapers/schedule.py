@@ -1,6 +1,6 @@
 """NHL schedule data scrapers."""
 
-from datetime import datetime
+from datetime import datetime, timezone
 
 import pandas as pd
 import polars as pl
@@ -52,7 +52,7 @@ def getScheduleData(team: str = "MTL", season: str | int = "20252026") -> list[d
     except Exception as e:
         raise RuntimeError(f"Error fetching schedule data: {e}")
 
-    now = datetime.utcnow().isoformat()
+    now = datetime.now(timezone.utc).isoformat()
     return [
         {**record, "scrapedOn": now, "source": "NHL Schedule API"}
         for record in data

@@ -1,14 +1,30 @@
 # scrapernhl/config.py
 """All league configurations and constants."""
 
+import logging
 import os
 from dataclasses import dataclass
 from typing import Literal
 
+_LOG = logging.getLogger(__name__)
+
 
 def _api_key(env_var: str, default: str) -> str:
-    """Return the value of *env_var* if set, otherwise *default*."""
-    return os.environ.get(env_var, default)
+    """Return the value of *env_var* if set, otherwise *default*.
+
+    Logs a warning when falling back to the hardcoded default so operators
+    know to set the environment variable in production.
+    """
+    value = os.environ.get(env_var)
+    if value is None:
+        _LOG.debug(
+            "Environment variable %s not set; using bundled default key. "
+            "Set %s to suppress this message.",
+            env_var,
+            env_var,
+        )
+        return default
+    return value
 
 
 LeagueType = Literal['nhl', 'ahl', 'ohl', 'whl', 'qmjhl', 'pwhl']

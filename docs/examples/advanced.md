@@ -1,401 +1,212 @@
-# Advanced Examples
+# Advanced Analytics Examples
 
-Advanced usage patterns for data analysis and feature engineering.
+Advanced usage patterns for the NHL analytics pipeline using `HockeyScraper`.
 
-## Find a Recent Completed Game
+All analytics methods require `HockeyScraper('nhl')` — they are NHL-only.
 
-```python
-from scrapernhl.scrapers.schedule import scrapeSchedule
-from datetime import datetime
+---
 
-# Get recent games from any team
-schedule = scrapeSchedule("MTL", "20252026")
-completed = schedule[schedule['gameState'] == 'OFF']
-
-if len(completed) > 0:
-    game_id = completed.iloc[0]['id']
-    game_info = completed.iloc[0]
-    print(f"Using game: {game_info['awayTeam.abbrev']} @ {game_info['homeTeam.abbrev']}")
-    print(f"Date: {game_info['gameDate']}")
-    print(f"Game ID: {game_id}")
-else:
-    print("No completed games found. Using a known game ID...")
-    game_id = 2024020001
-```
-
-## Working with Complete Game Data
+## Full Game Pipeline
 
 ```python
-from scrapernhl import scrape_game
+from scrapernhl import HockeyScraper
 
-# Get comprehensive game data
-game_tuple = scrape_game(game_id=game_id, include_tuple=True)
+nhl = HockeyScraper('nhl')
+game_id = 2024020001
 
-pbp = game_tuple.data
+# Full game data — HTML PBP + shifts + JSON API merged, with on-ice player lists
+pbp    = nhl.scrape_game(game_id)
+shifts = nhl.shifts(game_id)
 
-print(f"Game: {game_tuple.awayTeam} @ {game_tuple.homeTeam}")
-print(f"Total events: {len(pbp)}")
-
-print("\nRosters:")
-game_tuple.rosters
+print(f"Game has {len(pbp)} events")
+print(pbp.columns.tolist())
 ```
 
-## Time on Ice (TOI) Analysis
+---
+
+## Per-Player On-Ice Stats (Corsi, Fenwick, TOI)
 
 ```python
-from scrapernhl import toi_by_strength
+nhl = HockeyScraper('nhl')
 
-# Calculate TOI by strength
-toi_df = toi_by_strength(pbp)
+pbp = nhl.scrape_game(2024020001)
 
-print("TOI by strength:")
-toi_df.head(10)
+# Per-player, per-strength on-ice stats
+player_stats = nhl.on_ice_stats(pbp, rates=True)
 
-# Calculate individual player stats
-from scrapernhl import combo_on_ice_stats_both_teams
-
-combo_stats = combo_on_ice_stats_both_teams(
-    pbp,
-    n_team=1,
-    m_opp=0,          # set 0 for "vs ANY"
-    min_TOI=0,
-    include_goalies=False,
-    rates=True,
-    player_df=game_tuple.rosters  # DataFrame with ids/teams/positions
-)
-
-combo_stats[['player1Id', 'player1Name', 'player1Position', 'player1Number', 'team', 'opp', 'strength', 'seconds', 'minutes']]
+# Best CF% among players with at least 5 min of 5v5 TOI
+cf_leaders = (player_stats
+    .query("strength == '5v5' and TOI >= 5")
+    .nlargest(10, 'CF%'))
+print(cf_leaders[['player', 'team', 'TOI', 'CF', 'CA', 'CF%']])
 ```
 
-## Player Combinations Analysis
+---
 
-### Defensive Pairs (2-player combinations)
+## Team Strength-State Aggregates
 
 ```python
-# Get 2-player combinations (defensive pairs)
-combo_stats_2 = combo_on_ice_stats_both_teams(
-    pbp,
-    n_team=2,
-    m_opp=0,          # set 0 for "vs ANY"
-    min_TOI=60,
-    include_goalies=False,
-    rates=True,
-    player_df=game_tuple.rosters  # DataFrame with ids/teams/positions
-)
+nhl = HockeyScraper('nhl')
 
-top_10_pairs_5v5 = (combo_stats_2
-                    .query("team_combo_pos == '2D'")  # Get defensive pairs
-                    .query("strength == '5v5'")  # Filter for 5v5
-                    .nlargest(10, 'seconds')
-                    )[['team_combo', 'team_combo_ids', 'team', 'opp', 'strength', 'seconds', 'minutes']]
+pbp = nhl.scrape_game(2024020001)
 
-print("Most common defensive pairs (5v5):")
-top_10_pairs_5v5
+team_stats = nhl.team_strength_aggregates(pbp, rates=True)
+
+# 5v5 only
+stats_5v5 = team_stats.query("strength == '5v5'")
+print(stats_5v5[['team', 'minutes', 'CF', 'CA', 'GF', 'GA']])
 ```
 
-### Forward Lines (3-player combinations)
+---
+
+## Player Combination Stats
+
+### Individual player stats (1-player combos)
 
 ```python
-# Get 3-player combinations (forward lines)
-combo_stats_3 = combo_on_ice_stats_both_teams(
-    pbp,
-    n_team=3,
-    m_opp=0,          # set 0 for "vs ANY"
-    min_TOI=60,
-    include_goalies=False,
-    rates=True,
-    player_df=game_tuple.rosters  # DataFrame with ids/teams/positions
-)
+nhl = HockeyScraper('nhl')
 
-top_10_lines_5v5 = (combo_stats_3
-                    .query("team_combo_pos == '3F'")  # Get offensive lines
-                    .query("strength == '5v5'")  # Filter for 5v5
-                    .nlargest(10, 'seconds')
-                    )[['team_combo', 'team_combo_ids', 'team', 'opp', 'strength', 'seconds', 'minutes']]
+pbp = nhl.scrape_game(2024020001)
 
-print("Most common offensive lines (5v5):")
-top_10_lines_5v5
+# Stats for every player on a focus team
+combos_1 = nhl.combo_on_ice_stats(pbp, focus_team='MTL', n_team=1, rates=True)
+combos_1[['player1Id', 'player1Name', 'team', 'strength', 'seconds', 'minutes']].head(10)
 ```
 
-## On-Ice Statistics by Player
+### Defensive pairs (2-player combinations)
 
 ```python
-from scrapernhl import scrape_game, on_ice_stats_by_player_strength
+combos_2 = nhl.combo_on_ice_stats(pbp, focus_team='MTL', n_team=2, min_toi=60, rates=True)
 
-pbp, _ = scrape_game(2024020001)
-
-# Calculate on-ice stats for each player
-player_stats = on_ice_stats_by_player_strength(
-    pbp,
-    include_goalies=False,
-    rates=True  # Convert to per-60 rates
-)
-
-# Show top players by Corsi For %
-print("Best Corsi For % (min 5 min TOI):")
-cf_leaders = player_stats[player_stats['TOI'] >= 5].nlargest(10, 'CF%')
-print(cf_leaders[['player', 'team', 'strength', 'TOI', 'CF', 'CA', 'CF%']])
+top_d_pairs = (combos_2
+    .query("team_combo_pos == '2D' and strength == '5v5'")
+    .nlargest(10, 'seconds'))
+print(top_d_pairs[['team_combo', 'team', 'strength', 'seconds', 'minutes']])
 ```
 
-## Team-Level Aggregates
+### Forward lines (3-player combinations)
 
 ```python
-from scrapernhl import team_strength_aggregates
+combos_3 = nhl.combo_on_ice_stats(pbp, focus_team='MTL', n_team=3, min_toi=60, rates=True)
 
-# Calculate team stats by strength
-team_stats = team_strength_aggregates(
-    pbp,
-    include_goalies=False,
-    rates=True,
-    min_TOI=1
-)
-
-print("Team statistics by strength:")
-team_stats[['team', 'minutes', 'CF', 'CA', 'GF', 'GA']].sort_values(by=['minutes'], ascending=False)
-
-# 5v5 stats only
-stats_5v5 = team_stats[team_stats['strength'] == '5v5'].copy()
-
-print("\n5v5 Team Stats:")
-stats_5v5[['team', 'minutes', 'CF', 'CA', 'GF', 'GA']]
+top_lines = (combos_3
+    .query("team_combo_pos == '3F' and strength == '5v5'")
+    .nlargest(10, 'seconds'))
+print(top_lines[['team_combo', 'team', 'strength', 'seconds', 'minutes']])
 ```
+
+---
+
+## Time-on-Ice Matrix Analysis
+
+```python
+nhl = HockeyScraper('nhl')
+
+pbp    = nhl.scrape_game(2024020001)
+shifts = nhl.shifts(2024020001)
+
+# Build player-by-second boolean on-ice matrix
+matrix = nhl.seconds_matrix(pbp, shifts)
+
+# Per-second strength-state table (home/away skater counts)
+strengths = nhl.strengths_by_second(matrix)
+
+# Per-player, per-strength TOI (in minutes)
+toi = nhl.toi_by_strength_all(matrix, strengths)
+print(toi.head(10))
+
+# Pairwise teammate shared TOI
+pairs = nhl.shared_toi_teammates(matrix, strengths)
+print(pairs.head(10))
+
+# Cross-team opponent shared TOI
+opponents = nhl.shared_toi_opponents(matrix, strengths)
+print(opponents.head(10))
+```
+
+---
 
 ## Multi-Game Season Analysis
 
 ```python
 import pandas as pd
+from scrapernhl import HockeyScraper
 
-# Scrape multiple games (just 3 for demonstration)
-print("Scraping multiple games for season analysis...")
+nhl = HockeyScraper('nhl')
 
-game_ids_to_scrape = completed.head(3)['id'].tolist()
+# Get completed games from a team's schedule
+schedule = nhl.schedule(team='MTL', season=20252026)
+completed = schedule[schedule['gameState'] == 'OFF']
+game_ids  = completed.head(5)['id'].tolist()
+
+# Scrape and aggregate
 all_team_stats = []
-
-for gid in game_ids_to_scrape:
+for gid in game_ids:
     try:
-        print(f"Processing game {gid}...")
-        game_tuple = scrape_game(gid, include_tuple=True)
-        pbp = game_tuple.data
-        stats = team_strength_aggregates(pbp)
+        pbp   = nhl.scrape_game(gid)
+        stats = nhl.team_strength_aggregates(pbp)
         stats['game_id'] = gid
         all_team_stats.append(stats)
     except Exception as e:
-        print(f"Error with game {gid}: {e}")
+        print(f"Skipping game {gid}: {e}")
 
-# Combine all games
-if all_team_stats:
-    season_stats = pd.concat(all_team_stats, ignore_index=True)
+season_stats = pd.concat(all_team_stats, ignore_index=True)
 
-    # Aggregate by team
-    team_summary = season_stats.groupby('team').agg({
-        'minutes': 'sum',
-        'CF': 'sum',
-        'CA': 'sum',
-        'GF': 'sum',
-        'GA': 'sum'
-    }).reset_index()
-    
-    team_summary['CF%'] = 100 * team_summary['CF'] / (team_summary['CF'] + team_summary['CA'])
-    
-    print("\\nSeason stats across sampled games:")
-    team_summary
+# Aggregate by team
+summary = (season_stats
+    .groupby('team')
+    .agg(minutes=('minutes', 'sum'), CF=('CF', 'sum'), CA=('CA', 'sum'),
+         GF=('GF', 'sum'), GA=('GA', 'sum'))
+    .reset_index()
+    .assign(**{'CF%': lambda df: 100 * df['CF'] / (df['CF'] + df['CA'])}))
+
+print(summary.sort_values('CF%', ascending=False))
 ```
 
-## Phase 4: Advanced Analytics
+---
 
-The Phase 4 analytics module provides comprehensive statistical analysis and visualization capabilities.
-
-### Shot Metrics and Scoring Chances
+## On-Ice Format Helpers
 
 ```python
-from scrapernhl import (
-    identify_scoring_chances,
-    display_scoring_chances,
-)
+nhl = HockeyScraper('nhl')
+pbp = nhl.scrape_game(2024020001)
 
-# Get game data
-game_tuple = scrape_game(game_id, include_tuple=True)
-pbp = game_tuple.data
+# Convert list-based on-ice columns to tidy long format
+long_df = nhl.build_on_ice_long(pbp)
 
-# Identify high-danger, medium-danger, and low-danger chances
-pbp = identify_scoring_chances(pbp)
+# Expand on-ice lists into named wide columns (skater_1..6, goalie)
+wide_df = nhl.build_on_ice_wide(pbp, max_skaters=6, include_goalie=True)
 
-# Display scoring chances summary
-display_scoring_chances(pbp, game_tuple.homeTeam, game_tuple.awayTeam)
+# Convert shifts to ON/OFF event rows
+shifts     = nhl.shifts(2024020001)
+shift_evts = nhl.build_shifts_events(shifts)
 ```
 
-### Advanced Corsi and Fenwick
+---
+
+## Goal Replay Tracking Data
 
 ```python
-from scrapernhl import calculate_corsi, calculate_fenwick, display_advanced_stats
+from scrapernhl import HockeyScraper, tracking_dict_to_df
 
-# Calculate possession metrics
-corsi_df = calculate_corsi(pbp)
-fenwick_df = calculate_fenwick(pbp)
+nhl = HockeyScraper('nhl')
 
-print("\\nCorsi metrics (all shot attempts):")
-print(corsi_df)
+# Get raw play data with replay URLs attached
+pbp_raw = nhl.scrape_plays(2024020001, add_goal_replay=True)
 
-print("\\nFenwick metrics (unblocked shot attempts):")
-print(fenwick_df)
-
-# Display formatted advanced stats
-display_advanced_stats(corsi_df, fenwick_df, game_tuple.homeTeam, game_tuple.awayTeam)
+# Pick the first goal that has a replay URL
+goals = pbp_raw[pbp_raw.get('pptReplayUrl', pd.Series()).notna()]
+if not goals.empty:
+    replay_url = goals.iloc[0]['pptReplayUrl']
+    replay     = nhl.goal_replay(replay_url)
+    tracking   = tracking_dict_to_df(replay)
+    print(tracking.head())
 ```
 
-### Player Time on Ice Analysis
-
-```python
-from scrapernhl import calculate_player_toi, calculate_zone_start_percentage
-
-# Calculate player TOI by strength
-player_toi = calculate_player_toi(pbp, game_tuple.rosters)
-
-print("\\nTop 5 players by 5v5 TOI:")
-top_5v5_toi = player_toi[player_toi['strength'] == '5v5'].nlargest(5, 'toi_seconds')
-print(top_5v5_toi[['player_name', 'team', 'toi_minutes']])
-
-# Calculate zone start percentages
-zone_starts = calculate_zone_start_percentage(pbp, game_tuple.rosters)
-
-print("\\nPlayers with most offensive zone starts:")
-top_ozone = zone_starts.nlargest(5, 'ozone_start_pct')
-print(top_ozone[['player_name', 'team', 'ozone_starts', 'dzone_starts', 'ozone_start_pct']])
-```
-
-### Score Effects Analysis
-
-```python
-from scrapernhl import calculate_score_effects, display_score_effects
-
-# Analyze how score differential affects play
-score_effects = calculate_score_effects(pbp)
-
-print("\\nScore Effects (how teams perform when leading/trailing/tied):")
-print(score_effects)
-
-# Display formatted score effects
-display_score_effects(score_effects)
-```
-
-### Shooting Patterns Analysis
-
-```python
-from scrapernhl import analyze_shooting_patterns, display_shooting_patterns
-
-# Analyze shooting patterns by location and type
-shooting_patterns = analyze_shooting_patterns(pbp)
-
-print("\\nShooting patterns by team:")
-print(shooting_patterns)
-
-# Display formatted shooting patterns
-display_shooting_patterns(shooting_patterns)
-```
-
-### Comprehensive Analytics Report
-
-```python
-from scrapernhl import create_analytics_report, display_game_summary
-
-# Generate complete analytics report
-report = create_analytics_report(pbp, game_tuple.rosters)
-
-print("\\nGame Summary:")
-print(f"Home: {report['home_team']}, Away: {report['away_team']}")
-print(f"Score: {report['home_goals']}-{report['away_goals']}")
-
-# Display beautifully formatted game summary
-display_game_summary(
-    report, 
-    game_tuple.homeTeam, 
-    game_tuple.awayTeam,
-    show_players=True,
-    show_scoring_chances=True
-)
-
-# Access individual report sections
-print("\\nTeam Stats:")
-print(report['team_stats'])
-
-print("\\nTop Players:")
-print(report['top_players'])
-
-print("\\nScoring Chances:")
-print(report['scoring_chances'])
-```
-
-### Team and Player Summary Stats
-
-```python
-from scrapernhl import (
-    calculate_team_stats_summary,
-    calculate_player_stats_summary,
-    display_team_stats,
-    display_player_summary,
-    display_top_players
-)
-
-# Calculate team summary statistics
-team_stats = calculate_team_stats_summary(pbp, game_tuple.rosters)
-
-print("\\nTeam Statistics Summary:")
-print(team_stats)
-
-# Display formatted team stats
-display_team_stats(team_stats, game_tuple.homeTeam, game_tuple.awayTeam)
-
-# Calculate player summary statistics
-player_stats = calculate_player_stats_summary(pbp, game_tuple.rosters)
-
-print("\\nTop 5 players by goals:")
-top_scorers = player_stats.nlargest(5, 'goals')
-print(top_scorers[['player_name', 'team', 'goals', 'assists', 'points', 'shots']])
-
-# Display formatted player summaries
-for _, player in top_scorers.iterrows():
-    display_player_summary(player)
-
-# Display top players table
-display_top_players(player_stats, metric='points', n=10)
-```
-
-### Complete Analytics Workflow
-
-```python
-from scrapernhl import print_analytics_summary
-
-# Complete workflow: scrape, analyze, and display
-game_id = 2024020001
-
-# 1. Scrape game data
-game_tuple = scrape_game(game_id, include_tuple=True)
-pbp = game_tuple.data
-
-# 2. Identify scoring chances
-pbp = identify_scoring_chances(pbp)
-
-# 3. Calculate all metrics
-home_corsi = calculate_corsi(pbp, game_tuple.homeTeam)
-home_fenwick = calculate_fenwick(pbp, game_tuple.homeTeam)
-player_toi = calculate_player_toi(pbp, game_tuple.rosters)
-zone_starts = calculate_zone_start_percentage(pbp, game_tuple.rosters)
-score_effects = calculate_score_effects(pbp, game_tuple.homeTeam)
-shooting_patterns = analyze_shooting_patterns(pbp)
-
-# 4. Generate comprehensive report for home team
-report = create_analytics_report(
-    pbp,
-    shifts_df=None,
-    team=game_tuple.homeTeam
-)
-
-# 5. Display everything beautifully
-print_analytics_summary(report)
-```
+---
 
 ## See Also
 
-- [API Reference](../api.md) - Complete function documentation
+- [API Reference](../api.md) - Complete method documentation
 - [Getting Started](../getting-started.md) - Basic usage examples
 - [Scraping Examples](scraping.md) - Data collection examples

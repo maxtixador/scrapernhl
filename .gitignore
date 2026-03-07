@@ -25,6 +25,9 @@ site/
 .claude/
 .ai/
 
+# Internal / cloud integration docs (not for public release)
+docs/examples/cloud-pipeline.md
+
 # Jupyter Notebook checkpoints
 .ipynb_checkpoints/
 
@@ -53,6 +56,12 @@ diagnose_pbp.py
 test_standings.py
 notebooks/testing_nb.ipynb
 notebooks/bootstrap_data.json
+notebooks/qmjhl_rapm.ipynb
+notebooks/qmjhl_score_effects.ipynb
+notebooks/*.csv
+notebooks/*.json
+notebooks/*.parquet
+notebooks/*.gz
 
 # Archive and backup directories
 .archive/

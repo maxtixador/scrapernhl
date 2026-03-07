@@ -1,6 +1,6 @@
 """NHL standings data scrapers."""
 
-from datetime import datetime
+from datetime import datetime, timezone
 
 import pandas as pd
 import polars as pl
@@ -43,7 +43,7 @@ def getStandingsData(date: str = None) -> list[dict]:
     except Exception as e:
         raise RuntimeError(f"Error fetching standings data: {e}")
 
-    now = datetime.utcnow().isoformat()
+    now = datetime.now(timezone.utc).isoformat()
     return [
         {**record, "scrapedOn": now, "source": "NHL Standings API"}
         for record in data

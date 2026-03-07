@@ -3,7 +3,7 @@ import os
 import re
 from collections import Counter, defaultdict, namedtuple
 from collections.abc import Mapping, Sequence
-from datetime import datetime
+from datetime import datetime, timezone
 from functools import lru_cache
 from itertools import combinations
 from typing import (
@@ -26,7 +26,7 @@ from scrapernhl.core.http import DEFAULT_HEADERS, DEFAULT_TIMEOUT
 # Import new infrastructure (Phase 1-3)
 from scrapernhl.core.logging_config import get_logger
 from scrapernhl.core.utils import add_on_event_shift_start_qualifiers
-from scrapernhl.exceptions import InvalidGameError
+from scrapernhl.exceptions import APIError, InvalidGameError, ParsingError
 from scrapernhl.urls import (
     build_nhl_franchise_url,
     build_nhl_goal_replay_url,
@@ -129,7 +129,7 @@ def fetch_json(url: str) -> dict:
         resp.raise_for_status()
         return resp.json()
     except Exception as e:
-        raise Exception(f"Failed to fetch {url}: {e}")
+        raise APIError(f"Failed to fetch {url}: {e}") from e
 
 def fetch_html(url, timeout=10000):
     """Fetch HTML content using requests (fast path for static NHL reports).
@@ -140,8 +140,7 @@ def fetch_html(url, timeout=10000):
         resp.raise_for_status()
         return resp.text
     except Exception as e:
-        print(f"Error fetching {url}: {e}")
-        return None
+        raise APIError(f"Failed to fetch HTML from {url}: {e}") from e
 
 async def fetch_html_async(url, timeout=10000):
     """Async wrapper around fetch_html using a background thread."""
@@ -266,9 +265,9 @@ def getTeamsData(source: str = "calendar") -> list[dict]:
             data = [response]
 
     except Exception as e:
-        raise RuntimeError(f"Error fetching data from {source}: {e}")
+        raise APIError(f"Error fetching data from {source}: {e}") from e
 
-    now = datetime.utcnow().isoformat()
+    now = datetime.now(timezone.utc).isoformat()
     return [
         {**record, "scrapedOn": now, "source": source}
         for record in data
@@ -315,9 +314,9 @@ def getScheduleData(team: str = "MTL", season: str | int = "20252026") -> list[d
             raise ValueError(f"Unexpected response format: {response}")
 
     except Exception as e:
-        raise RuntimeError(f"Error fetching schedule data: {e}")
+        raise APIError(f"Error fetching schedule data: {e}") from e
 
-    now = datetime.utcnow().isoformat()
+    now = datetime.now(timezone.utc).isoformat()
     return [
         {**record, "scrapedOn": now, "source": "NHL Schedule API"}
         for record in data
@@ -353,7 +352,7 @@ def getStandingsData(date: str = None) -> list[dict]:
 
     # If no date is provided, use the previous year's new year's date
     if date is None:
-        date = f"{(datetime.utcnow() - pd.DateOffset(years=1)).strftime('%Y')}-01-01"
+        date = f"{datetime.now(timezone.utc).year - 1}-01-01"
 
     url = f"https://api-web.nhle.com/v1/standings/{date}"
 
@@ -368,9 +367,9 @@ def getStandingsData(date: str = None) -> list[dict]:
             raise ValueError(f"Unexpected response format: {response}")
 
     except Exception as e:
-        raise RuntimeError(f"Error fetching standings data: {e}")
+        raise APIError(f"Error fetching standings data: {e}") from e
 
-    now = datetime.utcnow().isoformat()
+    now = datetime.now(timezone.utc).isoformat()
     return [
         {**record, "scrapedOn": now, "source": "NHL Standings API"}
         for record in data
@@ -418,9 +417,9 @@ def getRosterData(team: str = "MTL", season: str | int = "20242025") -> list[dic
         ]
 
     except Exception as e:
-        raise RuntimeError(f"Error fetching roster data: {e}")
+        raise APIError(f"Error fetching roster data: {e}") from e
 
-    now = datetime.utcnow().isoformat()
+    now = datetime.now(timezone.utc).isoformat()
     return [
         {**record, "scrapedOn": now, "source": "NHL Roster API"}
         for record in data
@@ -479,9 +478,9 @@ def getTeamStatsData(
             raise ValueError(f"Unexpected response format: {response}")
 
     except Exception as e:
-        raise RuntimeError(f"Error fetching team stats data: {e}")
+        raise APIError(f"Error fetching team stats data: {e}") from e
 
-    now = datetime.utcnow().isoformat()
+    now = datetime.now(timezone.utc).isoformat()
     return [
         {**record, "scrapedOn": now, "source": "NHL Team Stats API"}
         for record in data
@@ -540,9 +539,9 @@ def getDraftData(year: str | int = "2024", round: str | int = "all") -> list[dic
             raise ValueError(f"Unexpected response format: {response}")
 
     except Exception as e:
-        raise RuntimeError(f"Error fetching draft data: {e}")
+        raise APIError(f"Error fetching draft data: {e}") from e
 
-    now = datetime.utcnow().isoformat()
+    now = datetime.now(timezone.utc).isoformat()
     return [
         {**record, "year": year, "scrapedOn": now, "source": "NHL Draft API"}
         for record in data
@@ -590,9 +589,9 @@ def getRecordsDraftData(year: str | int = "2025") -> list[dict]:
             raise ValueError(f"Unexpected response format: {response}")
 
     except Exception as e:
-        raise RuntimeError(f"Error fetching draft records: {e}")
+        raise APIError(f"Error fetching draft records: {e}") from e
 
-    now = datetime.utcnow().isoformat()
+    now = datetime.now(timezone.utc).isoformat()
     return [
         {**record, "year": year, "scrapedOn": now, "source": "NHL Draft Records API"}
         for record in data
@@ -640,9 +639,9 @@ def getRecordsTeamDraftHistoryData(franchise: str | int = 1) -> list[dict]:
             raise ValueError(f"Unexpected response format: {response}")
 
     except Exception as e:
-        raise RuntimeError(f"Error fetching team draft history: {e}")
+        raise APIError(f"Error fetching team draft history: {e}") from e
 
-    now = datetime.utcnow().isoformat()
+    now = datetime.now(timezone.utc).isoformat()
     return [
         {**record, "scrapedOn": now, "source": "NHL Team Draft History API"}
         for record in data
@@ -668,7 +667,7 @@ def getGameData(game: str | int, addGoalReplayData: bool = False) -> dict:
     """Scrape NHL play-by-play data and enrich with metadata."""
     game = str(game)
     url = f"https://api-web.nhle.com/v1/gamecenter/{game}/play-by-play"
-    now = datetime.utcnow().isoformat()
+    now = datetime.now(timezone.utc).isoformat()
     data = {}
 
     try:
@@ -700,7 +699,7 @@ def getGameData(game: str | int, addGoalReplayData: bool = False) -> dict:
         # data['plays'] = _add_normalized_coordinates(enriched_plays)
 
     except Exception as e:
-        raise RuntimeError(f"Error fetching play-by-play data: {e}")
+        raise APIError(f"Error fetching play-by-play data: {e}") from e
 
     data['scrapedOn'] = now
     data['source'] = 'NHL Play-by-Play API'
@@ -757,7 +756,7 @@ def scrapeHtmlPbp(game: str | int) -> dict:
             "data": game_html,
             "urls": {"home": url, "away": url},
             "game_id": game_id,
-            "scraped_on": datetime.utcnow().isoformat(),
+            "scraped_on": datetime.now(timezone.utc).isoformat(),
             "source": "NHL HTML Play-by-Play Reports",
         }
 
@@ -803,7 +802,7 @@ async def scrapeHtmlPbp_async(game: str | int) -> dict:
             "data": game_html,
             "urls": {"home": url, "away": url},
             "game_id": game_id,
-            "scraped_on": datetime.utcnow().isoformat(),
+            "scraped_on": datetime.now(timezone.utc).isoformat(),
             "source": "NHL HTML Play-by-Play Reports",
         }
 
@@ -811,7 +810,7 @@ async def scrapeHtmlPbp_async(game: str | int) -> dict:
         return result
 
     except Exception as e:
-        raise RuntimeError(f"Error fetching HTML play-by-play data for game {game_id}: {e}")
+        raise APIError(f"Error fetching HTML play-by-play data for game {game_id}: {e}") from e
 
 
 def scrapeHTMLShifts(game: str | int) -> dict:
@@ -855,7 +854,7 @@ def scrapeHTMLShifts(game: str | int) -> dict:
             "away": html_away,
             "urls": {"home": url_home, "away": url_away},
             "game_id": game_id,
-            "scraped_on": datetime.utcnow().isoformat(),
+            "scraped_on": datetime.now(timezone.utc).isoformat(),
             "source": "NHL HTML Shifts Reports",
         }
 
@@ -863,7 +862,7 @@ def scrapeHTMLShifts(game: str | int) -> dict:
         return result
 
     except Exception as e:
-        raise RuntimeError(f"Error fetching HTML shifts data for game {game_id}: {e}")
+        raise APIError(f"Error fetching HTML shifts data for game {game_id}: {e}") from e
 
 async def scrapeHTMLShifts_async(game: str | int) -> dict:
     """
@@ -906,7 +905,7 @@ async def scrapeHTMLShifts_async(game: str | int) -> dict:
             "away": html_away,
             "urls": {"home": url_home, "away": url_away},
             "game_id": game_id,
-            "scraped_on": datetime.utcnow().isoformat(),
+            "scraped_on": datetime.now(timezone.utc).isoformat(),
             "source": "NHL HTML Shifts Reports",
         }
 
@@ -914,7 +913,7 @@ async def scrapeHTMLShifts_async(game: str | int) -> dict:
         return result
 
     except Exception as e:
-        raise RuntimeError(f"Error fetching HTML shifts data for game {game_id}: {e}")
+        raise APIError(f"Error fetching HTML shifts data for game {game_id}: {e}") from e
 
 # Parse HTML PBP using Lexbor
 def parse_html_pbp(html: str) -> dict[str, Any]:
@@ -985,7 +984,7 @@ def parse_html_pbp(html: str) -> dict[str, Any]:
         }
 
     except Exception as e:
-        raise RuntimeError(f"Error parsing HTML play-by-play data: {e}")
+        raise ParsingError(f"Error parsing HTML play-by-play data: {e}") from e
 
 
 def _parse_on_ice_players(on_ice_raw: list[str]) -> tuple[list[list[str]], list[list[str]]]:
@@ -1112,7 +1111,6 @@ def _parse_game_info(parser: LexborHTMLParser) -> dict[str, str]:
     """Extract game information from the HTML."""
     try:
         import re
-        from datetime import datetime
 
         # Game info is typically in a table with ID "GameInfo"
         game_info = {}
@@ -1692,7 +1690,7 @@ def parse_html_shifts(html_home: str, html_away: str) -> dict[str, Any]:
             "total_summary_records": (len(home_data["summary"]) + len(away_data["summary"])),
             "home_parsing_successful": home_data["metadata"].get("parsing_successful", False),
             "away_parsing_successful": away_data["metadata"].get("parsing_successful", False),
-            "parsed_on": datetime.utcnow().isoformat() if "datetime" in globals() else None,
+            "parsed_on": datetime.now(timezone.utc).isoformat(),
         },
     }
 
@@ -1715,6 +1713,10 @@ def scrape_html_pbp(game_id: int, return_raw: bool = False) -> pd.DataFrame | tu
     for col in ["home_on_ice", "away_on_ice", "home_goalie", "away_goalie"]:
         df[col] = parsed[col]
     return (df, parsed) if return_raw else df
+
+async def scrape_html_pbp_async(game_id: int, return_raw: bool = False):
+    """Async wrapper around scrape_html_pbp using a background thread."""
+    return await asyncio.to_thread(scrape_html_pbp, game_id, return_raw)
 
 def _map_numbers(list_of_lists: list[Any], roster: pd.DataFrame, key: str) -> list[list[Any]]:
     if not isinstance(list_of_lists, list) or roster.empty:
@@ -1901,15 +1903,27 @@ def add_strengths_to_shifts_events(shifts_events: pd.DataFrame, strengths_df: pd
     """
     Adds gameStrength and detailedGameStrength columns to ON/OFF shift events.
     Uses strengths_by_second output and matches by elapsedTime.
+    Both columns are from the changing player's team perspective (not always the home team).
     """
-    # Map elapsedTime to strength columns
     shifts_events = shifts_events.copy()
     shifts_events["elapsedTime"] = pd.to_numeric(shifts_events["elapsedTime"], errors="coerce").astype("Int64")
-    # Map strengths by elapsedTime (index of strengths_df)
-    shifts_events["gameStrength"] = shifts_events["elapsedTime"].map(strengths_df["team_str_home"])
-    shifts_events["detailedGameStrength"] = shifts_events["elapsedTime"].map(
-        strengths_df["home_strength"].astype(str) + "v" + strengths_df["away_strength"].astype(str)
+
+    # Determine which rows belong to home players (isHome == 1)
+    is_home = shifts_events.get("isHome", pd.Series(1, index=shifts_events.index))
+    is_home = pd.to_numeric(is_home, errors="coerce").fillna(1).astype(int) == 1
+
+    # Build per-second lookup Series for each perspective
+    str_home = strengths_df["team_str_home"]
+    str_away = strengths_df["team_str_away"] if "team_str_away" in strengths_df.columns else (
+        strengths_df["away_strength"].astype(str).str.rstrip("*") + "v" +
+        strengths_df["home_strength"].astype(str).str.rstrip("*")
     )
+    det_home = strengths_df["home_strength"].astype(str) + "v" + strengths_df["away_strength"].astype(str)
+    det_away = strengths_df["away_strength"].astype(str) + "v" + strengths_df["home_strength"].astype(str)
+
+    elapsed = shifts_events["elapsedTime"]
+    shifts_events["gameStrength"] = elapsed.map(str_home).where(is_home, elapsed.map(str_away))
+    shifts_events["detailedGameStrength"] = elapsed.map(det_home).where(is_home, elapsed.map(det_away))
     return shifts_events
 
 def build_strength_segments_from_shifts(shifts: pd.DataFrame) -> pd.DataFrame:
@@ -1977,10 +1991,12 @@ def build_strength_segments_from_shifts(shifts: pd.DataFrame) -> pd.DataFrame:
 
 def strengths_by_second_from_segments(segments: pd.DataFrame) -> pd.DataFrame:
     """Expand compact strength segments to a per-second index for joining with events/shifts.
-    Index = elapsedTime; columns: team_str_home, home_strength, away_strength.
+    Index = elapsedTime; columns: team_str_home, team_str_away, home_strength, away_strength.
+    team_str_home is from the home team's perspective (e.g. "5v4" when home has the PP).
+    team_str_away is from the away team's perspective (e.g. "4v5" in the same situation).
     """
     if segments.empty:
-        return pd.DataFrame(columns=["team_str_home","home_strength","away_strength"]).astype({})
+        return pd.DataFrame(columns=["team_str_home","team_str_away","home_strength","away_strength"]).astype({})
 
     rows = []
     for _, r in segments.iterrows():
@@ -1989,10 +2005,11 @@ def strengths_by_second_from_segments(segments: pd.DataFrame) -> pd.DataFrame:
         home_s = f"{home}{'*' if int(r['pulled_home']) else ''}"
         away_s = f"{away}{'*' if int(r['pulled_away']) else ''}"
         team_str_home = f"{home}v{away}"
+        team_str_away = f"{away}v{home}"
         for t in range(int(r["t_start"]), int(r["t_end"])):
-            rows.append((t, team_str_home, home_s, away_s))
+            rows.append((t, team_str_home, team_str_away, home_s, away_s))
     out = (
-        pd.DataFrame(rows, columns=["elapsedTime","team_str_home","home_strength","away_strength"])
+        pd.DataFrame(rows, columns=["elapsedTime","team_str_home","team_str_away","home_strength","away_strength"])
         .set_index("elapsedTime")
         .sort_index()
     )
@@ -2226,7 +2243,7 @@ def scrape_game(game_id:int | str,
     "easternUTCOffset": api.get("easternUTCOffset"),
     "venueUTCOffset": api.get("venueUTCOffset"),
     # stamp these here; they’re not in the API payload
-    "scrapedOn": datetime.utcnow().isoformat(),
+    "scrapedOn": datetime.now(timezone.utc).isoformat(),
     "source": "NHL Play-by-Play API",
     }
     pbp = pd.json_normalize(api.get("plays", []), sep=".")
@@ -2321,8 +2338,8 @@ def scrape_game(game_id:int | str,
     det_right = away_strength.where(is_home, home_strength)
     m_valid = df["home_on_count"].gt(0) & df["away_on_count"].gt(0)
     df.loc[m_valid, ["home_strength","away_strength","gameStrength","detailedGameStrength"]] = pd.DataFrame({
-        "home_strength": det_left[m_valid],
-        "away_strength": det_right[m_valid],
+        "home_strength": home_strength[m_valid],
+        "away_strength": away_strength[m_valid],
         "gameStrength": game_left[m_valid].str.cat(game_right[m_valid], sep="v"),
         "detailedGameStrength": det_left[m_valid].str.cat(det_right[m_valid], sep="v"),
     })
@@ -2521,7 +2538,7 @@ async def scrape_game_async(game_id:int | str,
     """
 
     # HTML PBP Manips
-    df_html, html_meta = await scrape_html_pbp(game_id, return_raw=True)
+    df_html, html_meta = await scrape_html_pbp_async(game_id, return_raw=True)
     if "Time" not in df_html.columns and "timeInPeriod" in df_html.columns:
         df_html = df_html.rename(columns={"timeInPeriod": "Time"})
     required_html = {"Event", "Per", "Time"}
@@ -2543,7 +2560,7 @@ async def scrape_game_async(game_id:int | str,
 
 
     # Shifts
-    shifts = await scrape_shifts(game_id=game_id)
+    shifts = await scrape_shifts_async(game_id=game_id)
     shifts_events = build_shifts_events(shifts)
 
 
@@ -2621,8 +2638,8 @@ async def scrape_game_async(game_id:int | str,
     det_right = away_strength.where(is_home, home_strength)
     m_valid = df["home_on_count"].gt(0) & df["away_on_count"].gt(0)
     df.loc[m_valid, ["home_strength","away_strength","gameStrength","detailedGameStrength"]] = pd.DataFrame({
-        "home_strength": det_left[m_valid],
-        "away_strength": det_right[m_valid],
+        "home_strength": home_strength[m_valid],
+        "away_strength": away_strength[m_valid],
         "gameStrength": game_left[m_valid].str.cat(game_right[m_valid], sep="v"),
         "detailedGameStrength": det_left[m_valid].str.cat(det_right[m_valid], sep="v"),
     })
@@ -3299,10 +3316,6 @@ def combos_opponents_by_strength(
     return df[ordered].sort_values(["Strength","TOI"], ascending=[True, False]).reset_index(drop=True)
 
 
-# --- small helpers -----------------------------------------------------------
-def _expand_mi_tuple(mi_tuple, names, prefix):
-    return {f"{prefix}_{n}": v for n, v in zip(names, mi_tuple, strict=False)}
-
 def _build_empty_cols(idx_names, n_team, m_opp):
     cols = [f"p{k}_{n}" for k in range(1, n_team+1) for n in idx_names]
     cols += [f"opp{k}_{n}" for k in range(1, m_opp+1) for n in idx_names]
@@ -3697,6 +3710,13 @@ def engineer_xg_features(
     pulled_home, pulled_away.
     Missing ones are created as NA and handled gracefully.
     """
+    import warnings
+    warnings.warn(
+        "engineer_xg_features is deprecated and will be removed in a future release. "
+        "xG functionality has been sunset.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     df = pbp_df.copy()
 
     # --- Ensure required columns exist to avoid KeyErrors ---
@@ -3949,6 +3969,13 @@ def pipeline(game_id):
     build on-ice wide dataset, and scrape shifts + player info.
     Returns (pbp_with_xg_wide, players_df).
     """
+    import warnings
+    warnings.warn(
+        "pipeline is deprecated and will be removed in a future release. "
+        "xG functionality has been sunset.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
 
     # game_id = 2025020110
 

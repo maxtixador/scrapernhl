@@ -217,7 +217,7 @@ python -m scrapernhl pwhl standings
 
 # Save output
 python -m scrapernhl ahl standings -o standings.csv
-python -m scrapernhl nhl standings -f json -o standings.json
+python -m scrapernhl standings -f json -o standings.json
 python -m scrapernhl ahl stats --season 90 -f parquet -o stats.parquet
 ```
 
@@ -273,6 +273,6 @@ raw = ahl.fetch_raw('standings', season=90)
 
 ## Requirements
 
-- Python >= 3.9
+- Python >= 3.10
 - Network access to public NHL / HockeyTech APIs
 - See `pyproject.toml` for full dependency list
