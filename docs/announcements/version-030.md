@@ -1,12 +1,12 @@
 ---
-title: "Version 0.3.0 / 0.3.1 Released — Unified Client & Leaner Install"
-date: 2026-03-06
+title: "Version 0.3.x Released — Unified Client, Leaner Install & Strength-Label Fix"
+date: 2026-03-07
 tags: ["announcement", "release", "breaking-change"]
 categories: ["announcements"]
 ---
 
-# ANNOUNCEMENT: Version 0.3.0 / 0.3.1 Released
-*0.3.0: March 5th, 2026 — 0.3.1: March 6th, 2026*
+# ANNOUNCEMENT: Version 0.3.0 / 0.3.1 / 0.3.2 Released
+*0.3.0: March 5th, 2026 — 0.3.1: March 6th, 2026 — 0.3.2: March 7th, 2026*
 
 Hello, fellow hockey analytics enthusiasts!
 
@@ -51,6 +51,30 @@ pip install --upgrade scrapernhl
 ```
 You can also follow me on Bluesky [@HabsBrain.com](https://bsky.app/profile/habsbrain.com) or
 Twitter/X [@maxtixador](https://x.com/maxtixador) for updates.
+
+---
+
+## 0.3.2 Patch — March 7, 2026
+
+A follow-up bug-fix release. No new features or breaking changes.
+
+### Fix: Strength State Mirroring for the Alphabetically Second Team (PR #10)
+
+All per-player and per-combination analytics functions (`on_ice_stats_by_player_strength()`, `toi_by_player_and_strength()`, `combo_on_ice_stats()`, `combo_on_ice_stats_both_teams()`, `team_strength_aggregates()`) now use the **focus team's perspective** for strength labels. Previously, the alphabetically second team always received mirrored labels — e.g. its power-play bucket was labelled `"4v5"` instead of `"5v4"`.
+
+### Other fixes in 0.3.2
+
+| Fix | Details |
+|-----|--------|
+| `urllib3` minimum | Bumped from `2.0.0` to `2.0.7` to prevent silent truncation of chunked HTTP responses (incomplete PBP data with no error). |
+| `pandas` minimum | Updated to `>=2.2.3` for NumPy 2.x compatibility. |
+| README PWHL name | Corrected "Provincial" → "Professional" Women's Hockey League. |
+
+Upgrade:
+
+```bash
+pip install --upgrade scrapernhl
+```
 
 ---
 
@@ -464,4 +488,4 @@ Happy scraping!
 
 ---
 
-**Full Changelog**: [v0.1.5...v0.3.0](https://github.com/maxtixador/scrapernhl/compare/v0.1.5...v0.3.1)
+**Full Changelog**: [v0.1.5...v0.3.2](https://github.com/maxtixador/scrapernhl/compare/v0.1.5...v0.3.2)
