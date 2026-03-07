@@ -19,7 +19,7 @@ NHL support goes further with an advanced analytics pipeline: time-on-ice matric
 |--------|-----|---------------|----------------|
 | National Hockey League | `nhl` | `YYYYYYYY` | `20252026` |
 | American Hockey League | `ahl` | integer | `90` |
-| Provincial Women's Hockey League | `pwhl` | integer | `8` |
+| Professional Women's Hockey League | `pwhl` | integer | `8` |
 | Ontario Hockey League | `ohl` | integer | `83` |
 | Western Hockey League | `whl` | integer | `289` |
 | Quebec Major Junior Hockey League | `qmjhl` | integer | `211` |
