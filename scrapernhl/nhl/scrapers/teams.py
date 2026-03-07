@@ -1,16 +1,18 @@
 """NHL team data scrapers."""
 
-from datetime import datetime
-from typing import Dict, List
+from datetime import datetime, timezone
 
 import pandas as pd
 import polars as pl
 
+from scrapernhl.core.cache import cached
 from scrapernhl.core.http import fetch_json
+from scrapernhl.core.progress import console
 from scrapernhl.core.utils import json_normalize
 
 
-def getTeamsData(source: str = "calendar") -> List[Dict]:
+@cached(ttl=86400, cache_key_func=lambda source="calendar": f"teams_{source}")
+def getTeamsData(source: str = "calendar") -> list[dict]:
     """
     Scrapes NHL team data from various public endpoints and enriches it with metadata to dict format.
 
@@ -20,6 +22,7 @@ def getTeamsData(source: str = "calendar") -> List[Dict]:
     Returns:
     - List[Dict]: Raw enriched team data with metadata.
     """
+    console.print_info(f"Fetching teams data from {source}...")
     source_dict = {
 
         "calendar": "https://api-web.nhle.com/v1/schedule-calendar/now",
@@ -54,7 +57,7 @@ def getTeamsData(source: str = "calendar") -> List[Dict]:
     except Exception as e:
         raise RuntimeError(f"Error fetching data from {source}: {e}")
 
-    now = datetime.utcnow().isoformat()
+    now = datetime.now(timezone.utc).isoformat()
     return [
         {**record, "scrapedOn": now, "source": source}
         for record in data
@@ -73,5 +76,14 @@ def scrapeTeams(source: str = "calendar", output_format: str = "pandas") -> pd.D
     Returns:
     - pd.DataFrame or pl.DataFrame: Enriched team data with metadata in the specified format.
     """
+    from scrapernhl.core.schema import standardize_columns
+
     raw_data = getTeamsData(source)
-    return json_normalize(raw_data, output_format)
+    df = json_normalize(raw_data, output_format)
+
+    # Standardize column names if pandas format
+    if output_format == "pandas" and isinstance(df, pd.DataFrame):
+        df = standardize_columns(df, "teams", strict=False, warn_missing=False)
+
+    return df
+

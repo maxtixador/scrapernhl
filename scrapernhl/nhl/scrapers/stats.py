@@ -1,7 +1,6 @@
 """NHL team and player statistics scrapers."""
 
-from datetime import datetime
-from typing import Dict, List, Union
+from datetime import datetime, timezone
 
 import pandas as pd
 import polars as pl
@@ -12,10 +11,10 @@ from scrapernhl.core.utils import json_normalize
 
 def getTeamStatsData(
     team: str = "MTL",
-    season: Union[str, int] = "20252026",
-    session: Union[str, int] = 2,
+    season: str | int = "20252026",
+    session: str | int = 2,
     goalies: bool = False,
-) -> List[Dict]:
+) -> list[dict]:
     """
     Scrapes NHL team statistics for a given team and season.
 
@@ -47,7 +46,7 @@ def getTeamStatsData(
     except Exception as e:
         raise RuntimeError(f"Error fetching team stats data: {e}")
 
-    now = datetime.utcnow().isoformat()
+    now = datetime.now(timezone.utc).isoformat()
     return [
         {**record, "scrapedOn": now, "source": "NHL Team Stats API"}
         for record in data
@@ -57,8 +56,8 @@ def getTeamStatsData(
 
 def scrapeTeamStats(
     team: str = "MTL",
-    season: Union[str, int] = "20252026",
-    session: Union[str, int] = 2,
+    season: str | int = "20252026",
+    session: str | int = 2,
     goalies: bool = False,
     output_format: str = "pandas",
 ) -> pd.DataFrame | pl.DataFrame:

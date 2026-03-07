@@ -1,8 +1,7 @@
 """NHL draft data scrapers."""
 
 import logging
-from datetime import datetime
-from typing import Dict, List, Union
+from datetime import datetime, timezone
 
 import pandas as pd
 import polars as pl
@@ -13,7 +12,7 @@ from scrapernhl.core.utils import json_normalize
 LOG = logging.getLogger(__name__)
 
 
-def getDraftDataData(year: Union[str, int] = "2024", round: Union[str, int] = "all") -> List[Dict]:
+def getDraftData(year: str | int = "2024", round: str | int = "all") -> list[dict]:
     """
     Scrapes NHL draft data for a given season.
 
@@ -41,7 +40,7 @@ def getDraftDataData(year: Union[str, int] = "2024", round: Union[str, int] = "a
     except Exception as e:
         raise RuntimeError(f"Error fetching draft data: {e}")
 
-    now = datetime.utcnow().isoformat()
+    now = datetime.now(timezone.utc).isoformat()
     return [
         {**record, "year": year, "scrapedOn": now, "source": "NHL Draft API"}
         for record in data
@@ -49,7 +48,7 @@ def getDraftDataData(year: Union[str, int] = "2024", round: Union[str, int] = "a
     ]
 
 
-def scrapeDraftData(year: Union[str, int] = "2024", round: Union[str, int] = "all", output_format: str = "pandas") -> pd.DataFrame | pl.DataFrame:
+def scrapeDraftData(year: str | int = "2024", round: str | int = "all", output_format: str = "pandas") -> pd.DataFrame | pl.DataFrame:
     """
     Scrapes NHL draft data for a given season.
 
@@ -61,11 +60,11 @@ def scrapeDraftData(year: Union[str, int] = "2024", round: Union[str, int] = "al
     Returns:
     - pd.DataFrame or pl.DataFrame: Draft data with metadata in the specified format.
     """
-    raw_data = getDraftDataData(year, round)
+    raw_data = getDraftData(year, round)
     return json_normalize(raw_data, output_format)
 
 
-def getRecordsDraftData(year: Union[str, int] = "2025") -> List[Dict]:
+def getRecordsDraftData(year: str | int = "2025") -> list[dict]:
     """
     Scrapes NHL draft records for a given season from NHL Records API.
 
@@ -92,7 +91,7 @@ def getRecordsDraftData(year: Union[str, int] = "2025") -> List[Dict]:
     except Exception as e:
         raise RuntimeError(f"Error fetching draft records: {e}")
 
-    now = datetime.utcnow().isoformat()
+    now = datetime.now(timezone.utc).isoformat()
     return [
         {**record, "year": year, "scrapedOn": now, "source": "NHL Draft Records API"}
         for record in data
@@ -100,7 +99,7 @@ def getRecordsDraftData(year: Union[str, int] = "2025") -> List[Dict]:
     ]
 
 
-def scrapeDraftRecords(year: Union[str, int] = "2025", output_format: str = "pandas") -> pd.DataFrame | pl.DataFrame:
+def scrapeDraftRecords(year: str | int = "2025", output_format: str = "pandas") -> pd.DataFrame | pl.DataFrame:
     """
     Scrapes NHL draft records for a given season from NHL Records API.
 
@@ -115,7 +114,7 @@ def scrapeDraftRecords(year: Union[str, int] = "2025", output_format: str = "pan
     return json_normalize(raw_data, output_format)
 
 
-def getRecordsTeamDraftHistoryData(franchise: Union[str, int] = 1) -> List[Dict]:
+def getRecordsTeamDraftHistoryData(franchise: str | int = 1) -> list[dict]:
     """
     Scrapes NHL team draft history for a given franchise.
 
@@ -143,7 +142,7 @@ def getRecordsTeamDraftHistoryData(franchise: Union[str, int] = 1) -> List[Dict]
     except Exception as e:
         raise RuntimeError(f"Error fetching team draft history: {e}")
 
-    now = datetime.utcnow().isoformat()
+    now = datetime.now(timezone.utc).isoformat()
     return [
         {**record, "scrapedOn": now, "source": "NHL Team Draft History API"}
         for record in data
@@ -151,7 +150,7 @@ def getRecordsTeamDraftHistoryData(franchise: Union[str, int] = 1) -> List[Dict]
     ]
 
 
-def scrapeTeamDraftHistory(franchise: Union[str, int] = 1, output_format: str = "pandas") -> pd.DataFrame | pl.DataFrame:
+def scrapeTeamDraftHistory(franchise: str | int = 1, output_format: str = "pandas") -> pd.DataFrame | pl.DataFrame:
     """
     Scrapes NHL team draft history for a given franchise from NHL Records API.
 

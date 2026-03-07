@@ -1,0 +1,985 @@
+# API Reference
+
+ScraperNHL API documentation covering 6 hockey leagues.
+
+## Table of Contents
+
+### Leagues We Scrape
+- [NHL - National Hockey League](#nhl---national-hockey-league) - Full scraping with play-by-play, advanced analytics
+- [PWHL - Professional Women's Hockey League](#pwhl---professional-womens-hockey-league) - Complete API access
+- [AHL - American Hockey League](#ahl---american-hockey-league) - Complete API access
+- [OHL - Ontario Hockey League](#ohl---ontario-hockey-league) - Complete API access
+- [WHL - Western Hockey League](#whl---western-hockey-league) - Complete API access
+- [QMJHL - Quebec Maritimes Junior Hockey League](#qmjhl---quebec-maritimes-junior-hockey-league) - Complete API access
+
+### Other
+- [Core Utilities](#core-utilities) - HTTP, caching, utils
+- [Configuration](#configuration) - Constants and settings
+
+---
+
+# NHL - National Hockey League
+
+Full NHL scraping with play-by-play data, advanced analytics, and Expected Goals (xG) model.
+
+### Quick Start
+
+#### Modular Imports (Recommended)
+```python
+from scrapernhl.scrapers.teams import scrapeTeams
+from scrapernhl.scrapers.schedule import scrapeSchedule
+
+teams = scrapeTeams()
+schedule = scrapeSchedule("MTL", "20252026")
+```
+
+#### Legacy Imports (Still Supported)
+```python
+from scrapernhl import scrapeTeams, scrapeSchedule
+
+teams = scrapeTeams()
+schedule = scrapeSchedule("MTL", "20252026")
+```
+
+### Command-Line Interface
+
+All scraping functions are also available via CLI for quick data exports:
+
+```bash
+# View available commands
+python scrapernhl/cli.py --help
+
+# Scrape teams
+python scrapernhl/cli.py teams --output teams.csv
+
+# Scrape schedule
+python scrapernhl/cli.py schedule MTL 20252026 --format json
+
+# Scrape with different output formats
+python scrapernhl/cli.py standings --format parquet
+```
+
+See the [CLI Examples](examples/cli.md) page for comprehensive CLI usage.
+
+---
+### IMPORTANT NOTE ABOUT GAME STRENGTHS
+In order to differenciate **empty-net** situtations to **non-empty net** situations, there the scraper incorporates a unique format. It uses the star symbol to indentify the team with an empty net.
+
+If you ever see ```5v6*```, it means that the player or team is facing a team that has 6 skaters and the net empty. 
+If you see ```5*v4```, it means that the player or team has 5 skaters and the net empty while facing a team with 4 skaters with a goalie. 
+
+---
+
+## Scrapers Module (`scrapernhl.scrapers`)
+
+### Teams (`scrapernhl.scrapers.teams`)
+
+#### `getTeamsData(source: str = "default") -> List[Dict]`
+
+Scrapes raw NHL team data from various public endpoints.
+
+**Parameters:**
+- `source` (str): Data source to use. Options: `"default"`, `"calendar"`, `"records"`
+
+**Returns:**
+- `List[Dict]`: Raw team data with metadata
+
+**Example:**
+```python
+from scrapernhl.scrapers.teams import getTeamsData
+
+raw_teams = getTeamsData(source="default")
+```
+
+#### `scrapeTeams(source: str = "default", output_format: str = "pandas") -> DataFrame`
+
+Scrapes NHL team data and returns as DataFrame.
+
+**Parameters:**
+- `source` (str): Data source. Options: `"default"`, `"calendar"`, `"records"`
+- `output_format` (str): Output format. Options: `"pandas"`, `"polars"`
+
+**Returns:**
+- `pd.DataFrame` or `pl.DataFrame`: Team data with metadata
+
+**Example:**
+```python
+from scrapernhl.scrapers.teams import scrapeTeams
+
+# Get as pandas DataFrame
+teams = scrapeTeams()
+
+# Get as polars DataFrame
+teams_pl = scrapeTeams(output_format="polars")
+```
+
+---
+
+### Schedule (`scrapernhl.scrapers.schedule`)
+
+#### `getScheduleData(team: str = "MTL", season: Union[str, int] = "20252026") -> List[Dict]`
+
+Scrapes raw NHL schedule data for a team and season.
+
+**Parameters:**
+- `team` (str): Team abbreviation (e.g., "MTL", "TOR", "BOS")
+- `season` (str | int): Season ID (e.g., "20252026" or 20252026)
+
+**Returns:**
+- `List[Dict]`: Raw schedule records
+
+**Example:**
+```python
+from scrapernhl.scrapers.schedule import getScheduleData
+
+raw_schedule = getScheduleData("MTL", "20252026")
+```
+
+#### `scrapeSchedule(team: str = "MTL", season: Union[str, int] = "20252026", output_format: str = "pandas") -> DataFrame`
+
+Scrapes NHL schedule data for a team and season.
+
+**Parameters:**
+- `team` (str): Team abbreviation
+- `season` (str | int): Season ID
+- `output_format` (str): Output format. Options: `"pandas"`, `"polars"`
+
+**Returns:**
+- `pd.DataFrame` or `pl.DataFrame`: Schedule data
+
+**Example:**
+```python
+from scrapernhl.scrapers.schedule import scrapeSchedule
+
+# Montreal Canadiens 2025-26 season
+schedule = scrapeSchedule("MTL", "20252026")
+```
+
+---
+
+### Standings (`scrapernhl.scrapers.standings`)
+
+#### `getStandingsData(date: str = None) -> List[Dict]`
+
+Scrapes raw NHL standings data for a specific date.
+
+**Parameters:**
+- `date` (str, optional): Date in 'YYYY-MM-DD' format. Defaults to previous year's January 1st
+
+**Returns:**
+- `List[Dict]`: Raw standings records
+
+**Example:**
+```python
+from scrapernhl.scrapers.standings import getStandingsData
+
+raw_standings = getStandingsData("2025-01-01")
+```
+
+#### `scrapeStandings(date: str = None, output_format: str = "pandas") -> DataFrame`
+
+Scrapes NHL standings data for a specific date.
+
+**Parameters:**
+- `date` (str, optional): Date in 'YYYY-MM-DD' format
+- `output_format` (str): Output format. Options: `"pandas"`, `"polars"`
+
+**Returns:**
+- `pd.DataFrame` or `pl.DataFrame`: Standings data
+
+**Example:**
+```python
+from scrapernhl.scrapers.standings import scrapeStandings
+
+standings = scrapeStandings("2025-01-01")
+```
+
+---
+
+### Roster (`scrapernhl.scrapers.roster`)
+
+#### `getRosterData(team: str = "MTL", season: Union[str, int] = "20242025") -> List[Dict]`
+
+Scrapes raw NHL roster data for a team and season.
+
+**Parameters:**
+- `team` (str): Team abbreviation
+- `season` (str | int): Season ID
+
+**Returns:**
+- `List[Dict]`: Raw roster records (forwards, defensemen, goalies)
+
+**Example:**
+```python
+from scrapernhl.scrapers.roster import getRosterData
+
+raw_roster = getRosterData("MTL", "20242025")
+```
+
+#### `scrapeRoster(team: str = "MTL", season: Union[str, int] = "20242025", output_format: str = "pandas") -> DataFrame`
+
+Scrapes NHL roster data for a team and season.
+
+**Parameters:**
+- `team` (str): Team abbreviation
+- `season` (str | int): Season ID
+- `output_format` (str): Output format
+
+**Returns:**
+- `pd.DataFrame` or `pl.DataFrame`: Roster data
+
+**Example:**
+```python
+from scrapernhl.scrapers.roster import scrapeRoster
+
+roster = scrapeRoster("MTL", "20252026")
+```
+
+---
+
+### Stats (`scrapernhl.scrapers.stats`)
+
+#### `getTeamStatsData(team: str = "MTL", season: Union[str, int] = "20252026", session: Union[str, int] = 2, goalies: bool = False) -> List[Dict]`
+
+Scrapes raw NHL team statistics.
+
+**Parameters:**
+- `team` (str): Team abbreviation
+- `season` (str | int): Season ID
+- `session` (str | int): Session type - 1: pre-season, 2: regular season, 3: playoffs
+- `goalies` (bool): If True, fetch goalie stats; if False, fetch skater stats
+
+**Returns:**
+- `List[Dict]`: Raw statistics records
+
+**Example:**
+```python
+from scrapernhl.scrapers.stats import getTeamStatsData
+
+# Get skater stats
+skater_stats = getTeamStatsData("MTL", "20252026", session=2, goalies=False)
+
+# Get goalie stats
+goalie_stats = getTeamStatsData("MTL", "20252026", session=2, goalies=True)
+```
+
+#### `scrapeTeamStats(team: str = "MTL", season: Union[str, int] = "20252026", session: Union[str, int] = 2, goalies: bool = False, output_format: str = "pandas") -> DataFrame`
+
+Scrapes NHL team statistics.
+
+**Parameters:**
+- `team` (str): Team abbreviation
+- `season` (str | int): Season ID
+- `session` (str | int): Session type
+- `goalies` (bool): Fetch goalie stats vs skater stats
+- `output_format` (str): Output format
+
+**Returns:**
+- `pd.DataFrame` or `pl.DataFrame`: Team statistics
+
+**Example:**
+```python
+from scrapernhl.scrapers.stats import scrapeTeamStats
+
+stats = scrapeTeamStats("MTL", "20252026", session=2)
+```
+
+---
+
+### Draft (`scrapernhl.scrapers.draft`)
+
+#### `getDraftDataData(year: Union[str, int] = "2024", round: Union[str, int] = "all") -> List[Dict]`
+
+Scrapes raw NHL draft data.
+
+**Parameters:**
+- `year` (str | int): Draft year (e.g., "2024")
+- `round` (str | int): Round number or "all" for all rounds
+
+**Returns:**
+- `List[Dict]`: Raw draft records
+
+#### `scrapeDraftData(year: Union[str, int] = "2024", round: Union[str, int] = "all", output_format: str = "pandas") -> DataFrame`
+
+Scrapes NHL draft data.
+
+**Parameters:**
+- `year` (str | int): Draft year
+- `round` (str | int): Round number or "all"
+- `output_format` (str): Output format
+
+**Returns:**
+- `pd.DataFrame` or `pl.DataFrame`: Draft data
+
+**Example:**
+```python
+from scrapernhl.scrapers.draft import scrapeDraftData
+
+# All rounds
+draft = scrapeDraftData("2024", "all")
+
+# First round only
+first_round = scrapeDraftData("2024", 1)
+```
+
+#### `getRecordsDraftData(year: Union[str, int] = "2025") -> List[Dict]`
+
+Scrapes draft records from NHL Records API.
+
+#### `scrapeDraftRecords(year: Union[str, int] = "2025", output_format: str = "pandas") -> DataFrame`
+
+Scrapes draft records from NHL Records API.
+
+#### `getRecordsTeamDraftHistoryData(franchise: Union[str, int] = 1) -> List[Dict]`
+
+Scrapes team draft history for a franchise.
+
+**Parameters:**
+- `franchise` (str | int): Franchise ID
+
+#### `scrapeTeamDraftHistory(franchise: Union[str, int] = 1, output_format: str = "pandas") -> DataFrame`
+
+Scrapes team draft history.
+
+**Example:**
+```python
+from scrapernhl.scrapers.draft import scrapeTeamDraftHistory
+
+# Montreal Canadiens (franchise ID 1)
+mtl_draft_history = scrapeTeamDraftHistory(1)
+```
+
+---
+
+### Games (`scrapernhl.scrapers.games`)
+
+#### `getGameData(game: Union[str, int], addGoalReplayData: bool = False) -> Dict`
+
+Scrapes NHL play-by-play data for a game.
+
+**Parameters:**
+- `game` (str | int): Game ID (e.g., 2024020001)
+- `addGoalReplayData` (bool): If True, fetch goal replay data
+
+**Returns:**
+- `Dict`: Complete game data with enriched plays
+
+**Example:**
+```python
+from scrapernhl.scrapers.games import getGameData
+
+game_data = getGameData(2024020001, addGoalReplayData=True)
+```
+
+#### `scrapePlays(game: Union[str, int], addGoalReplayData: bool = False, output_format: str = "pandas") -> DataFrame`
+
+Scrapes play-by-play data for a game.
+
+**Parameters:**
+- `game` (str | int): Game ID
+- `addGoalReplayData` (bool): Include goal replay data
+- `output_format` (str): Output format
+
+**Returns:**
+- `pd.DataFrame` or `pl.DataFrame`: Play-by-play data
+
+**Example:**
+```python
+from scrapernhl.scrapers.games import scrapePlays
+
+pbp = scrapePlays(2024020001)
+```
+
+#### `getGoalReplayData(json_url: str) -> List[Dict]`
+
+Fetches goal replay data from a JSON URL.
+
+**Parameters:**
+- `json_url` (str): URL to goal replay JSON
+
+**Returns:**
+- `List[Dict]`: Goal replay data
+
+#### `convert_json_to_goal_url(json_url: str) -> str`
+
+Converts a JSON URL to NHL goal replay URL.
+
+**Parameters:**
+- `json_url` (str): JSON URL
+
+**Returns:**
+- `str`: Goal replay URL
+
+---
+
+## Core Utilities (`scrapernhl.core`)
+
+### HTTP (`scrapernhl.core.http`)
+
+#### `fetch_json(url: str, timeout: int = 10) -> dict`
+
+Fetches JSON data from a URL with retry logic.
+
+**Parameters:**
+- `url` (str): URL to fetch
+- `timeout` (int): Request timeout in seconds
+
+**Returns:**
+- `dict`: Parsed JSON response
+
+**Raises:**
+- `requests.exceptions.RequestException`: If request fails
+
+**Example:**
+```python
+from scrapernhl.core.http import fetch_json
+
+data = fetch_json("https://api-web.nhle.com/v1/...")
+```
+
+#### `fetch_html(url: str, timeout: int = 10) -> Optional[str]`
+
+Fetches HTML content from a URL.
+
+**Parameters:**
+- `url` (str): URL to fetch
+- `timeout` (int): Request timeout in seconds
+
+**Returns:**
+- `str` or `None`: HTML content, or None if request fails
+
+#### `fetch_html_async(url: str, timeout: int = 10) -> Optional[str]`
+
+Async wrapper around fetch_html.
+
+#### `fetch_json_async(url: str, timeout: int = 10) -> dict`
+
+Async wrapper around fetch_json.
+
+---
+
+### Utils (`scrapernhl.core.utils`)
+
+#### `time_str_to_seconds(time_str: Optional[str]) -> Optional[int]`
+
+Converts time string in 'MM:SS' format to total seconds.
+
+**Parameters:**
+- `time_str` (str): Time string (e.g., "05:30")
+
+**Returns:**
+- `int` or `None`: Total seconds
+
+**Example:**
+```python
+from scrapernhl.core.utils import time_str_to_seconds
+
+seconds = time_str_to_seconds("05:30")  # Returns 330
+```
+
+#### `json_normalize(data: List[Dict], output_format: str = "pandas") -> DataFrame`
+
+Normalizes nested JSON data to flat table.
+
+**Parameters:**
+- `data` (List[Dict]): List of dictionaries
+- `output_format` (str): "pandas" or "polars"
+
+**Returns:**
+- `pd.DataFrame` or `pl.DataFrame`: Normalized data
+
+---
+
+## Configuration (`scrapernhl.config`)
+
+### Constants
+
+```python
+from scrapernhl.config import (
+    DEFAULT_TEAM,      # "MTL"
+    DEFAULT_SEASON,    # "20252026"
+    DEFAULT_DATE,      # "2025-11-11"
+    DEFAULT_HEADERS,   # HTTP headers dict
+    DEFAULT_TIMEOUT,   # 10 seconds
+)
+```
+
+### API Endpoints
+
+```python
+from scrapernhl.config import (
+    NHL_API_BASE_URL,
+    NHL_API_BASE_URL_V1,
+    STANDINGS_ENDPOINT,
+    TEAM_SCHEDULE_ENDPOINT,
+    FRANCHISES_ENDPOINT,
+)
+```
+
+---
+
+## Legacy Functions
+
+Advanced functions (PBP parsing, feature engineering, analytics) are available via lazy loading from `scraper_legacy.py`. These load only when accessed:
+
+```python
+from scrapernhl import (
+    scrape_game,
+    engineer_xg_features,
+    build_on_ice_wide,
+    toi_by_strength,
+    combo_on_ice_stats,
+)
+```
+
+**Note:** These functions require additional dependencies (xgboost, etc.) and are being modularized in Phase 2.
+
+---
+
+## Complete Example
+
+```python
+from scrapernhl.scrapers.teams import scrapeTeams
+from scrapernhl.scrapers.schedule import scrapeSchedule
+from scrapernhl.scrapers.standings import scrapeStandings
+from scrapernhl.scrapers.games import scrapePlays
+
+# Get all teams
+teams = scrapeTeams()
+print(f"Found {len(teams)} teams")
+
+# Get Montreal Canadiens schedule
+mtl_schedule = scrapeSchedule("MTL", "20252026")
+print(f"MTL has {len(mtl_schedule)} games")
+
+# Get current standings
+standings = scrapeStandings("2025-01-01")
+print(f"Standings for {len(standings)} teams")
+
+# Get play-by-play for a specific game
+pbp = scrapePlays(2024020001)
+print(f"Game has {len(pbp)} events")
+```
+
+---
+
+## Performance Tips
+
+1. **Use modular imports** for faster loading:
+   ```python
+   from scrapernhl.scrapers.teams import scrapeTeams  # Fast
+   from scrapernhl import scrapeTeams  # Also fast, but loads more
+   ```
+
+2. **Choose output format** based on your needs:
+   ```python
+   teams_pd = scrapeTeams(output_format="pandas")   # pandas
+   teams_pl = scrapeTeams(output_format="polars")   # polars (faster)
+   ```
+
+3. **Cache results** when scraping multiple times:
+   ```python
+   @lru_cache(maxsize=100)
+   def get_cached_teams():
+       return scrapeTeams()
+   ```
+
+---
+
+# PWHL - Professional Women's Hockey League
+
+Complete API access for the Professional Women's Hockey League using the HockeyTech/LeagueStat platform.
+
+## PWHL Overview
+
+- **API Key**: `446521baf8c38984`
+- **Teams**: 9 teams (Boston Fleet, Minnesota Frost, Montréal Victoire, New York Sirens, Ottawa Charge, Toronto Sceptres)
+- **Base URL**: `https://lscluster.hockeytech.com/feed/index.php`
+- **Rate Limit**: ~2 requests/second
+
+## PWHL Quick Start
+
+```python
+from scrapernhl.pwhl import api
+
+# Get all PWHL teams
+teams = api.get_teams()
+print(f"Found {len(teams.get('teams', []))} teams")
+
+# Get top scorers
+stats = api.get_skater_stats(limit=20)
+
+# Get current standings
+standings = api.get_standings()
+
+# Get today's games
+games = api.get_scorebar()
+```
+
+## PWHL Available Functions
+
+## Supported Leagues
+
+- **PWHL** - Professional Women's Hockey League
+- **AHL** - American Hockey League  
+- **OHL** - Ontario Hockey League
+- **WHL** - Western Hockey League
+- **QMJHL** - Quebec Maritimes Junior Hockey League
+
+## Common API Functions
+
+All 5 leagues support the same 15 functions:
+
+| Function | Description |
+|----------|-------------|
+| `get_teams()` | All teams in the league |
+| `get_scorebar()` | Live games and schedule |
+| `get_standings()` | League standings |
+| `get_skater_stats()` | Skater statistics with filtering |
+| `get_goalie_stats()` | Goalie statistics with filtering |
+| `get_player_profile()` | Individual player details |
+| `get_all_players()` | All players (skaters + goalies) |
+| `get_schedule()` | Full season schedule |
+| `get_team_schedule()` | Team-specific schedule |
+| `get_game_preview()` | Pre-game data and lineups |
+| `get_game_summary()` | Game summary and box score |
+| `get_play_by_play()` | Detailed play-by-play data |
+| `get_game_full_data()` | Complete game data (all 3 above) |
+| `get_roster()` | Team roster |
+| `get_bootstrap()` | League configuration |
+
+## Quick Reference
+
+### Basic Usage (Same for All Leagues)
+
+```python
+# Import your league of choice
+from scrapernhl.pwhl import api  # or ahl, ohl, whl, qmjhl
+
+# Get teams
+teams = api.get_teams()
+
+# Get player stats
+stats = api.get_skater_stats(limit=50)
+
+# Get standings
+standings = api.get_standings(group_by='division')
+
+# Get live games
+games = api.get_scorebar(days_ahead=7)
+```
+
+### Cross-League Comparison
+
+```python
+from scrapernhl.pwhl import api as pwhl
+from scrapernhl.ahl import api as ahl
+from scrapernhl.ohl import api as ohl
+from scrapernhl.whl import api as whl
+from scrapernhl.qmjhl import api as qmjhl
+
+# Compare team counts
+for name, module in [('PWHL', pwhl), ('AHL', ahl), ('OHL', ohl)]:
+    teams = module.get_teams()
+    print(f"{name}: {len(teams.get('teams', []))} teams")
+```
+
+---
+
+## PWHL API
+
+Professional Women's Hockey League API.
+
+### Configuration
+- **API Key**: `446521baf8c38984`
+- **Teams**: 9 teams (Boston, Minnesota, Montréal, New York, Ottawa, Toronto)
+- **Base URL**: `https://lscluster.hockeytech.com/feed/index.php`
+
+### Quick Start
+
+```python
+from scrapernhl.pwhl import api
+
+# Get all PWHL teams
+teams = api.get_teams()
+
+# Get top scorers
+stats = api.get_skater_stats(limit=20)
+
+# Get current standings
+standings = api.get_standings()
+
+# Get today's games
+games = api.get_scorebar()
+```
+
+### Example: Team Dashboard
+
+```python
+from scrapernhl.pwhl import api
+
+def pwhl_team_dashboard(team_id):
+    """Get complete team information."""
+    return {
+        'roster': api.get_roster(team_id=team_id),
+        'schedule': api.get_team_schedule(team_id=team_id),
+        'skaters': api.get_skater_stats(team=str(team_id), limit=50),
+        'goalies': api.get_goalie_stats(team=str(team_id), limit=10)
+    }
+
+# Get Boston Fleet dashboard (team_id=2)
+boston_data = pwhl_team_dashboard(2)
+```
+
+---
+
+## AHL API
+
+American Hockey League API.
+
+### Configuration
+- **API Key**: `ccb91f29d6744675`
+- **Site ID**: `3`
+- **Teams**: 24+ teams
+- **Base URL**: `https://lscluster.hockeytech.com/feed/index.php`
+
+### Quick Start
+
+```python
+from scrapernhl.ahl import api
+
+# Get all AHL teams
+teams = api.get_teams()
+
+# Get league leaders
+stats = api.get_skater_stats(limit=50)
+
+# Get standings by division
+standings = api.get_standings(group_by='division')
+```
+
+### Example: Player Search
+
+```python
+from scrapernhl.ahl import api
+
+def find_ahl_rookies(limit=20):
+    """Get top rookie players."""
+    stats = api.get_skater_stats(
+        rookies=1,
+        limit=limit
+    )
+    players = stats.get('players', [])
+    
+    for player in players:
+        print(f"{player['name']}: {player.get('points', 0)} pts")
+    
+    return players
+
+rookies = find_ahl_rookies(limit=20)
+```
+
+---
+
+## OHL API
+
+Ontario Hockey League API.
+
+### Configuration
+- **API Key**: `f1aa699db3d81487`
+- **Teams**: 20+ teams
+- **Base URL**: `https://lscluster.hockeytech.com/feed/index.php`
+
+### Quick Start
+
+```python
+from scrapernhl.ohl import api
+
+# Get all OHL teams
+teams = api.get_teams()
+
+# Get scoring leaders
+leaders = api.get_skater_stats(limit=10)
+
+# Get team schedule
+schedule = api.get_team_schedule(team_id=5)
+```
+
+### Example: Game Analysis
+
+```python
+from scrapernhl.ohl import api
+
+def analyze_ohl_game(game_id):
+    """Get complete game analysis."""
+    game_data = api.get_game_full_data(game_id)
+    
+    return {
+        'preview': game_data.get('preview'),
+        'summary': game_data.get('summary'),
+        'pbp': game_data.get('play_by_play')
+    }
+
+game = analyze_ohl_game(12345)
+```
+
+---
+
+## WHL API
+
+Western Hockey League API.
+
+### Configuration
+- **API Key**: `f1aa699db3d81487` (shared with OHL)
+- **Teams**: 22+ teams
+- **Base URL**: `https://lscluster.hockeytech.com/feed/index.php`
+
+### Quick Start
+
+```python
+from scrapernhl.whl import api
+
+# Get all WHL teams
+teams = api.get_teams()
+
+# Get goalie stats
+goalies = api.get_goalie_stats(
+    qualified='qualified',
+    limit=20
+)
+
+# Get standings
+standings = api.get_standings(context='overall')
+```
+
+### Example: Team Comparison
+
+```python
+from scrapernhl.whl import api
+
+def compare_whl_teams(team_id_1, team_id_2):
+    """Compare two WHL teams."""
+    team1_stats = api.get_skater_stats(team=str(team_id_1), limit=100)
+    team2_stats = api.get_skater_stats(team=str(team_id_2), limit=100)
+    
+    return {
+        'team1': team1_stats,
+        'team2': team2_stats
+    }
+
+comparison = compare_whl_teams(5, 8)
+```
+
+---
+
+## QMJHL API
+
+Quebec Maritimes Junior Hockey League API.
+
+### Configuration
+- **API Key**: `f322673b6bcae299`
+- **Teams**: 18+ teams
+- **Base URL**: `https://lscluster.hockeytech.com/feed/index.php`
+
+### Quick Start
+
+```python
+from scrapernhl.qmjhl import api
+
+# Get all QMJHL teams
+teams = api.get_teams()
+
+# Get player stats with pagination
+page1 = api.get_skater_stats(first=0, limit=50)
+page2 = api.get_skater_stats(first=50, limit=50)
+
+# Get team roster
+roster = api.get_roster(team_id=3)
+```
+
+### Example: League Leaders
+
+```python
+from scrapernhl.qmjhl import api
+
+def qmjhl_scoring_leaders(top_n=10):
+    """Get top scorers in QMJHL."""
+    stats = api.get_skater_stats(limit=top_n)
+    players = stats.get('players', [])
+    
+    leaders = []
+    for i, player in enumerate(players, 1):
+        leaders.append({
+            'rank': i,
+            'name': player.get('name'),
+            'team': player.get('team'),
+            'goals': player.get('goals', 0),
+            'assists': player.get('assists', 0),
+            'points': player.get('points', 0)
+        })
+    
+    return leaders
+
+leaders = qmjhl_scoring_leaders(top_n=10)
+for leader in leaders:
+    print(f"{leader['rank']}. {leader['name']}: {leader['points']}P")
+```
+
+---
+
+## Multi-League Common Parameters
+
+### Player Stats Functions
+
+Both `get_skater_stats()` and `get_goalie_stats()` support:
+
+```python
+api.get_skater_stats(
+    limit=50,           # Max results
+    first=0,            # Starting offset (pagination)
+    team='5',           # Filter by team ID
+    rookies=1,          # Rookies only (0 or 1)
+    stats_type='standard',  # Stats type
+    qualified='qualified',  # Qualified players only
+    division='2',       # Filter by division
+    conference='1'      # Filter by conference
+)
+```
+
+### Schedule Functions
+
+```python
+api.get_schedule(
+    team_id=-1,         # -1 for all teams, or specific team ID
+    month=-1,           # -1 for all months, 1-12 for specific
+    location='home'     # 'home', 'away', or None for all
+)
+```
+
+### Standings Functions
+
+```python
+api.get_standings(
+    group_by='division',  # 'division', 'conference', 'league'
+    context='overall'     # 'overall', 'home', 'away'
+)
+```
+
+---
+
+## Multi-League Resources
+
+For detailed examples and patterns:
+
+- **[Quick Reference Guide](api-quick-reference.md)** - Fast lookup for all functions
+- **[Complete Examples](multi-league-api-examples.md)** - Comprehensive usage guide
+- **[Interactive Notebook](../notebooks/multi_league_api_examples.ipynb)** - Jupyter examples
+- **[Test Suite](../test_multi_league_api.py)** - Working examples for all leagues
+
+---
+
+For more information, see:
+- [Getting Started Guide](getting-started.md)
+- [NHL Examples](examples/scraping.md)
+- [Multi-League Examples](multi-league-api-examples.md)
+- [Modularization Guide](../MODULARIZATION.md)

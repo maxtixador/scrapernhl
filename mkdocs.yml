@@ -1,5 +1,5 @@
 site_name: ScraperNHL Documentation
-site_description: NHL data scraping package with Expected Goals model
+site_description: Hockey data scraping and analytics for NHL, AHL, PWHL, OHL, WHL, and QMJHL
 site_author: Max Tixador
 site_url: https://maxtixador.github.io/scrapernhl/
 repo_url: https://github.com/maxtixador/scrapernhl
@@ -14,9 +14,13 @@ nav:
       - Scraping Data: examples/scraping.md
       - Advanced Analytics: examples/advanced.md
       - Data Export: examples/export.md
+      - Cloud Pipeline: examples/cloud-pipeline.md
   - About: about.md
   - Announcements:
+      - Version 0.3.0: announcements/version-030.md
+      - Version 0.1.5: announcements/version-015.md
       - Version 0.1.4: announcements/version-014.md
+      
 
 theme:
   name: material

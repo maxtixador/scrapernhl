@@ -1,48 +1,43 @@
-import requests
-from bs4 import BeautifulSoup
-import json
+import asyncio
 import os
+import re
+from collections import Counter, defaultdict, namedtuple
+from collections.abc import Mapping, Sequence
+from datetime import datetime, timezone
+from functools import lru_cache
+from itertools import combinations
+from typing import (
+    Any,
+)
+
 import numpy as np
 import pandas as pd
 import polars as pl
-from datetime import datetime
-from typing import Any, Callable, Dict, Iterable, Iterator, Literal, Mapping, MutableMapping, Optional, Protocol, Sequence, Tuple, TypeVar, Union, overload, List
-import asyncio
-from functools import lru_cache
-from selectolax.lexbor import LexborHTMLParser
-import re 
-from itertools import combinations
-from collections import defaultdict, Counter, namedtuple
+import requests
 from requests.adapters import HTTPAdapter
-from urllib3.util.retry import Retry
-from collections import defaultdict
-
-import xgboost as xgb
-import joblib
-
-
-from functools import lru_cache
 from selectolax.lexbor import LexborHTMLParser
-import re 
-from itertools import combinations
-from collections import defaultdict, Counter, namedtuple
-from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
-import logging
+# xgboost and joblib are kept as lazy imports inside the deprecated
+# engineer_xg_features / predict_xg_for_pbp functions.
+# Import zone start functions from utils
+from scrapernhl.core.http import DEFAULT_HEADERS, DEFAULT_TIMEOUT
 
-# Logging setup
-LOG = logging.getLogger(__name__)
-if not logging.getLogger().handlers:
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
+# Import new infrastructure (Phase 1-3)
+from scrapernhl.core.logging_config import get_logger
+from scrapernhl.core.utils import add_on_event_shift_start_qualifiers
+from scrapernhl.exceptions import APIError, InvalidGameError, ParsingError
+from scrapernhl.urls import (
+    build_nhl_franchise_url,
+    build_nhl_goal_replay_url,
+    build_nhl_records_franchise_url,
+    build_nhl_schedule_calendar_url,
+    build_nhl_schedule_url,
+)
 
-# Constants and session setup
-DEFAULT_HEADERS = {
-    "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119 Safari/537.36",
-    "Accept": "application/json,text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-    "Accept-Language": "en-US,en;q=0.5",
-    "Connection": "keep-alive",
-}
+# Logging setup with new infrastructure
+LOG = get_logger(__name__)
+
 SESSION = requests.Session()
 _retries = Retry(
     total=5,
@@ -54,10 +49,9 @@ _retries = Retry(
 _adapter = HTTPAdapter(max_retries=_retries, pool_connections=50, pool_maxsize=50)
 SESSION.mount("https://", _adapter)
 SESSION.mount("http://", _adapter)
-DEFAULT_TIMEOUT = 10  # seconds
 
 # Mapping of NHL event types to standardized codes
-EVENT_MAPPING: Dict[str, str] = {
+EVENT_MAPPING: dict[str, str] = {
     "blocked-shot": "BLOCK",
     "delayed-penalty": "DELPEN",
     "faceoff": "FAC",
@@ -77,7 +71,6 @@ EVENT_MAPPING: Dict[str, str] = {
 
 
 # XGBoost model and feature paths
-import os
 _PKG_DIR = os.path.dirname(os.path.abspath(__file__))
 MODEL_PATH = os.path.join(_PKG_DIR, "models", "xgboost_xG_model1.json")
 FEAT_PATH  = os.path.join(_PKG_DIR, "models", "xgboost_xG_features1.pkl")
@@ -92,15 +85,15 @@ BASE_NUM = [
     "previousEventDistanceFromGoal","previousEventAngleSigned","previousEventXNorm","previousEventYNorm",
     "shotType","strength", "isRebound","isHome","shootEmptyNet",
     "previousEvent"
-    
+
 ]
 BASE_BOOL = ["isRebound","isHome","shootEmptyNet", "previousEventSameTeam"]
-CAT_COLS  = ["shotType","strength", "previousEvent"]  
+CAT_COLS  = ["shotType","strength", "previousEvent"]
 
 #  Events considered for xG calculation
-EVENTS_FOR_XG = ["GOAL", "SHOT", "MISS"]  
+EVENTS_FOR_XG = ["GOAL", "SHOT", "MISS"]
 
-def time_str_to_seconds(time_str: Optional[str]) -> Optional[int]:
+def time_str_to_seconds(time_str: str | None) -> int | None:
     """Convert a time string in 'MM:SS' format to total seconds."""
     if not time_str or not isinstance(time_str, str):
         return None
@@ -109,7 +102,7 @@ def time_str_to_seconds(time_str: Optional[str]) -> Optional[int]:
         return int(m) * 60 + int(s)
     except Exception:
         return None
-    
+
 def _group_merge_index(df: pd.DataFrame, keys: Sequence[str], out_col: str = "merge_idx") -> pd.Series:
     """Helper to create a merge index for deduplication."""
     k = df[keys].astype(str).agg("|".join, axis=1)
@@ -117,7 +110,7 @@ def _group_merge_index(df: pd.DataFrame, keys: Sequence[str], out_col: str = "me
 
 def _dedup_cols(cols: pd.Index) -> pd.Index:
     """Helper to deduplicate column names by appending suffixes."""
-    seen: Dict[str, int] = {}
+    seen: dict[str, int] = {}
     out: list[str] = []
     for c in cols:
         if c not in seen:
@@ -136,7 +129,7 @@ def fetch_json(url: str) -> dict:
         resp.raise_for_status()
         return resp.json()
     except Exception as e:
-        raise Exception(f"Failed to fetch {url}: {e}")
+        raise APIError(f"Failed to fetch {url}: {e}") from e
 
 def fetch_html(url, timeout=10000):
     """Fetch HTML content using requests (fast path for static NHL reports).
@@ -147,8 +140,7 @@ def fetch_html(url, timeout=10000):
         resp.raise_for_status()
         return resp.text
     except Exception as e:
-        print(f"Error fetching {url}: {e}")
-        return None
+        raise APIError(f"Failed to fetch HTML from {url}: {e}") from e
 
 async def fetch_html_async(url, timeout=10000):
     """Async wrapper around fetch_html using a background thread."""
@@ -156,7 +148,7 @@ async def fetch_html_async(url, timeout=10000):
 
 
 # Helper function for converting list of dicts to dataframe with pandas or polars
-def json_normalize(data: List[Dict], output_format: str = "pandas") -> pd.DataFrame | pl.DataFrame:
+def json_normalize(data: list[dict], output_format: str = "pandas") -> pd.DataFrame | pl.DataFrame:
     """
     Normalize nested JSON data to a flat table.
 
@@ -175,7 +167,7 @@ def json_normalize(data: List[Dict], output_format: str = "pandas") -> pd.DataFr
         raise ValueError("output_format must be one of ['pandas', 'polars']")
 
 # Helper PBP functions (normalize coordinates and fetch goal replay data)
-def _add_normalized_coordinates(events: List) -> List:
+def _add_normalized_coordinates(events: list) -> list:
     """Add normalized coordinate system (attacking direction)."""
 
     for event in events:
@@ -205,15 +197,15 @@ def _add_normalized_coordinates(events: List) -> List:
 def getGoalReplayData(json_url):
     """
     Convert a JSON URL to the NHL goal replay.
-    
+
     Args:
         json_url (str): The URL of the JSON file containing goal data.
-        
+
     Returns:
         list[dict]: A list of dictionaries containing goal replay data.
     """
     goal_url = convert_json_to_goal_url(json_url)
-    
+
 
     # Custom headers to simulate a browser request
     headers = {
@@ -225,8 +217,8 @@ def getGoalReplayData(json_url):
     # Make the request
     response = SESSION.get(json_url, headers={**DEFAULT_HEADERS, **headers}, timeout=DEFAULT_TIMEOUT)
     data = response.json() if response.status_code == 200 else []
-    
-    
+
+
     return data
 
 # Helper function to convert JSON URL to NHL goal replay URL
@@ -234,11 +226,11 @@ def convert_json_to_goal_url(json_url):
     parts = json_url.split('/')
     game_id = parts[-2]
     event_id = parts[-1].replace('ev', '').replace('.json', '')
-    return f"https://www.nhl.com/ppt-replay/goal/{game_id}/{event_id}"
+    return build_nhl_goal_replay_url(game_id, event_id)
 
 
 # Scrape NHL Teams
-def getTeamsData(source: str = "calendar") -> List[Dict]:
+def getTeamsData(source: str = "calendar") -> list[dict]:
     """
     Scrapes NHL team data from various public endpoints and enriches it with metadata to dict format.
 
@@ -249,16 +241,9 @@ def getTeamsData(source: str = "calendar") -> List[Dict]:
     - List[Dict]: Raw enriched team data with metadata.
     """
     source_dict = {
-
-        "calendar": "https://api-web.nhle.com/v1/schedule-calendar/now",
-        "franchise": "https://api.nhle.com/stats/rest/en/franchise?sort=fullName&include=lastSeason.id&include=firstSeason.id",
-        "records": (
-            "https://records.nhl.com/site/api/franchise?"
-            "include=teams.id&include=teams.active&include=teams.triCode&"
-            "include=teams.placeName&include=teams.commonName&include=teams.fullName&"
-            "include=teams.logos&include=teams.conference.name&include=teams.division.name&"
-            "include=teams.franchiseTeam.firstSeason.id&include=teams.franchiseTeam.lastSeason.id"
-        ),
+        "calendar": build_nhl_schedule_calendar_url(),
+        "franchise": build_nhl_franchise_url(),
+        "records": build_nhl_records_franchise_url(),
     }
 
     if source not in source_dict:
@@ -280,9 +265,9 @@ def getTeamsData(source: str = "calendar") -> List[Dict]:
             data = [response]
 
     except Exception as e:
-        raise RuntimeError(f"Error fetching data from {source}: {e}")
+        raise APIError(f"Error fetching data from {source}: {e}") from e
 
-    now = datetime.utcnow().isoformat()
+    now = datetime.now(timezone.utc).isoformat()
     return [
         {**record, "scrapedOn": now, "source": source}
         for record in data
@@ -304,7 +289,7 @@ def scrapeTeams(source: str = "calendar", output_format: str = "pandas") -> pd.D
     return json_normalize(raw_data, output_format)
 
 # Scrape NHL Schedule
-def getScheduleData(team: str = "MTL", season: Union[str, int] = "20252026") -> List[Dict]:
+def getScheduleData(team: str = "MTL", season: str | int = "20252026") -> list[dict]:
     """
     Scrapes raw NHL schedule data for a given team and season.
 
@@ -316,7 +301,7 @@ def getScheduleData(team: str = "MTL", season: Union[str, int] = "20252026") -> 
     - List[Dict]: Raw schedule records with metadata
     """
     season = str(season)
-    url = f"https://api-web.nhle.com/v1/club-schedule-season/{team}/{season}"
+    url = build_nhl_schedule_url(team, season)
 
     try:
         response = fetch_json(url)
@@ -329,16 +314,16 @@ def getScheduleData(team: str = "MTL", season: Union[str, int] = "20252026") -> 
             raise ValueError(f"Unexpected response format: {response}")
 
     except Exception as e:
-        raise RuntimeError(f"Error fetching schedule data: {e}")
+        raise APIError(f"Error fetching schedule data: {e}") from e
 
-    now = datetime.utcnow().isoformat()
+    now = datetime.now(timezone.utc).isoformat()
     return [
         {**record, "scrapedOn": now, "source": "NHL Schedule API"}
         for record in data
         if isinstance(record, dict)
     ]
 
-def scrapeSchedule(team: str = "MTL", season: Union[str, int] = "20252026", output_format: str = "pandas") -> pd.DataFrame | pl.DataFrame:
+def scrapeSchedule(team: str = "MTL", season: str | int = "20252026", output_format: str = "pandas") -> pd.DataFrame | pl.DataFrame:
     """
     Scrapes NHL schedule data for a given team and season.
 
@@ -354,7 +339,7 @@ def scrapeSchedule(team: str = "MTL", season: Union[str, int] = "20252026", outp
     return json_normalize(raw_data, output_format)
 
 # Scrape NHL Standings
-def getStandingsData(date: str = None) -> List[Dict]:
+def getStandingsData(date: str = None) -> list[dict]:
     """
     Scrapes NHL standings data for a given date.
 
@@ -367,7 +352,7 @@ def getStandingsData(date: str = None) -> List[Dict]:
 
     # If no date is provided, use the previous year's new year's date
     if date is None:
-        date = f"{(datetime.utcnow() - pd.DateOffset(years=1)).strftime('%Y')}-01-01"
+        date = f"{datetime.now(timezone.utc).year - 1}-01-01"
 
     url = f"https://api-web.nhle.com/v1/standings/{date}"
 
@@ -382,9 +367,9 @@ def getStandingsData(date: str = None) -> List[Dict]:
             raise ValueError(f"Unexpected response format: {response}")
 
     except Exception as e:
-        raise RuntimeError(f"Error fetching standings data: {e}")
+        raise APIError(f"Error fetching standings data: {e}") from e
 
-    now = datetime.utcnow().isoformat()
+    now = datetime.now(timezone.utc).isoformat()
     return [
         {**record, "scrapedOn": now, "source": "NHL Standings API"}
         for record in data
@@ -406,7 +391,7 @@ def scrapeStandings(date: str = None, output_format: str = "pandas") -> pd.DataF
     return json_normalize(raw_data, output_format)
 
 # Scrape NHL Roster
-def getRosterData(team: str = "MTL", season: Union[str, int] = "20242025") -> List[Dict]:
+def getRosterData(team: str = "MTL", season: str | int = "20242025") -> list[dict]:
     """
     Scrapes NHL roster data for a given team and season.
 
@@ -432,16 +417,16 @@ def getRosterData(team: str = "MTL", season: Union[str, int] = "20242025") -> Li
         ]
 
     except Exception as e:
-        raise RuntimeError(f"Error fetching roster data: {e}")
+        raise APIError(f"Error fetching roster data: {e}") from e
 
-    now = datetime.utcnow().isoformat()
+    now = datetime.now(timezone.utc).isoformat()
     return [
         {**record, "scrapedOn": now, "source": "NHL Roster API"}
         for record in data
         if isinstance(record, dict)
     ]
 
-def scrapeRoster(team: str = "MTL", season: Union[str, int] = "20242025", output_format: str = "pandas") -> pd.DataFrame | pl.DataFrame:
+def scrapeRoster(team: str = "MTL", season: str | int = "20242025", output_format: str = "pandas") -> pd.DataFrame | pl.DataFrame:
     """
     Scrapes NHL roster data for a given team and season.
 
@@ -460,10 +445,10 @@ def scrapeRoster(team: str = "MTL", season: Union[str, int] = "20242025", output
 # Scrape Team Stats
 def getTeamStatsData(
     team: str = "MTL",
-    season: Union[str, int] = "20252026",
-    session: Union[str, int] = 2,
+    season: str | int = "20252026",
+    session: str | int = 2,
     goalies: bool = False,
-) -> List[Dict]:
+) -> list[dict]:
     """
     Scrapes NHL team statistics for a given team and season.
 
@@ -493,9 +478,9 @@ def getTeamStatsData(
             raise ValueError(f"Unexpected response format: {response}")
 
     except Exception as e:
-        raise RuntimeError(f"Error fetching team stats data: {e}")
+        raise APIError(f"Error fetching team stats data: {e}") from e
 
-    now = datetime.utcnow().isoformat()
+    now = datetime.now(timezone.utc).isoformat()
     return [
         {**record, "scrapedOn": now, "source": "NHL Team Stats API"}
         for record in data
@@ -504,8 +489,8 @@ def getTeamStatsData(
 
 def scrapeTeamStats(
     team: str = "MTL",
-    season: Union[str, int] = "20252026",
-    session: Union[str, int] = 2,
+    season: str | int = "20252026",
+    session: str | int = 2,
     goalies: bool = False,
     output_format: str = "pandas",
 ) -> pd.DataFrame | pl.DataFrame:
@@ -527,7 +512,7 @@ def scrapeTeamStats(
 
 
 # Scrape NHL Draft Data
-def getDraftDataData(year: Union[str, int] = "2024", round: Union[str, int] = "all") -> List[Dict]:
+def getDraftData(year: str | int = "2024", round: str | int = "all") -> list[dict]:
     """
     Scrapes NHL draft data for a given season.
 
@@ -554,16 +539,16 @@ def getDraftDataData(year: Union[str, int] = "2024", round: Union[str, int] = "a
             raise ValueError(f"Unexpected response format: {response}")
 
     except Exception as e:
-        raise RuntimeError(f"Error fetching draft data: {e}")
+        raise APIError(f"Error fetching draft data: {e}") from e
 
-    now = datetime.utcnow().isoformat()
+    now = datetime.now(timezone.utc).isoformat()
     return [
         {**record, "year": year, "scrapedOn": now, "source": "NHL Draft API"}
         for record in data
         if isinstance(record, dict)
     ]
 
-def scrapeDraftData(year: Union[str, int] = "2024", round: Union[str, int] = "all", output_format: str = "pandas") -> pd.DataFrame | pl.DataFrame:
+def scrapeDraftData(year: str | int = "2024", round: str | int = "all", output_format: str = "pandas") -> pd.DataFrame | pl.DataFrame:
     """
     Scrapes NHL draft data for a given season.
 
@@ -575,12 +560,12 @@ def scrapeDraftData(year: Union[str, int] = "2024", round: Union[str, int] = "al
     Returns:
     - pd.DataFrame or pl.DataFrame: Draft data with metadata in the specified format.
     """
-    raw_data = getDraftDataData(year, round)
+    raw_data = getDraftData(year, round)
     return json_normalize(raw_data, output_format)
 
 
 # Scrape NHL Draft Records
-def getRecordsDraftData(year: Union[str, int] = "2025") -> List[Dict]:
+def getRecordsDraftData(year: str | int = "2025") -> list[dict]:
     """
     Scrapes NHL draft records for a given season from NHL Records API.
 
@@ -604,16 +589,16 @@ def getRecordsDraftData(year: Union[str, int] = "2025") -> List[Dict]:
             raise ValueError(f"Unexpected response format: {response}")
 
     except Exception as e:
-        raise RuntimeError(f"Error fetching draft records: {e}")
+        raise APIError(f"Error fetching draft records: {e}") from e
 
-    now = datetime.utcnow().isoformat()
+    now = datetime.now(timezone.utc).isoformat()
     return [
         {**record, "year": year, "scrapedOn": now, "source": "NHL Draft Records API"}
         for record in data
         if isinstance(record, dict)
     ]
 
-def scrapeDraftRecords(year: Union[str, int] = "2025", output_format: str = "pandas") -> pd.DataFrame | pl.DataFrame:
+def scrapeDraftRecords(year: str | int = "2025", output_format: str = "pandas") -> pd.DataFrame | pl.DataFrame:
     """
     Scrapes NHL draft records for a given season from NHL Records API.
 
@@ -629,7 +614,7 @@ def scrapeDraftRecords(year: Union[str, int] = "2025", output_format: str = "pan
 
 
 # Scrape NHL Team Draft History
-def getRecordsTeamDraftHistoryData(franchise: Union[str, int] = 1) -> List[Dict]:
+def getRecordsTeamDraftHistoryData(franchise: str | int = 1) -> list[dict]:
     """
     Scrapes NHL team draft history for a given franchise.
 
@@ -654,16 +639,16 @@ def getRecordsTeamDraftHistoryData(franchise: Union[str, int] = 1) -> List[Dict]
             raise ValueError(f"Unexpected response format: {response}")
 
     except Exception as e:
-        raise RuntimeError(f"Error fetching team draft history: {e}")
+        raise APIError(f"Error fetching team draft history: {e}") from e
 
-    now = datetime.utcnow().isoformat()
+    now = datetime.now(timezone.utc).isoformat()
     return [
         {**record, "scrapedOn": now, "source": "NHL Team Draft History API"}
         for record in data
         if isinstance(record, dict)
     ]
 
-def scrapeTeamDraftHistory(franchise: Union[str, int] = 1, output_format: str = "pandas") -> pd.DataFrame | pl.DataFrame:
+def scrapeTeamDraftHistory(franchise: str | int = 1, output_format: str = "pandas") -> pd.DataFrame | pl.DataFrame:
     """
     Scrapes NHL team draft history for a given franchise from NHL Records API.
 
@@ -678,18 +663,18 @@ def scrapeTeamDraftHistory(franchise: Union[str, int] = 1, output_format: str = 
     return json_normalize(raw_data, output_format)
 
 
-def getGameData(game: Union[str, int], addGoalReplayData: bool = False) -> Dict:
+def getGameData(game: str | int, addGoalReplayData: bool = False) -> dict:
     """Scrape NHL play-by-play data and enrich with metadata."""
     game = str(game)
     url = f"https://api-web.nhle.com/v1/gamecenter/{game}/play-by-play"
-    now = datetime.utcnow().isoformat()
+    now = datetime.now(timezone.utc).isoformat()
     data = {}
 
     try:
         response = fetch_json(url)
         if not isinstance(response, dict) or not response:
             raise ValueError(f"Unexpected response format: {response}")
-        
+
         data = response
         extra_keys = ['gameDate', 'gameType', 'startTimeUTC', 'easternUTCOffset', 'venueUTCOffset']
 
@@ -714,14 +699,14 @@ def getGameData(game: Union[str, int], addGoalReplayData: bool = False) -> Dict:
         # data['plays'] = _add_normalized_coordinates(enriched_plays)
 
     except Exception as e:
-        raise RuntimeError(f"Error fetching play-by-play data: {e}")
+        raise APIError(f"Error fetching play-by-play data: {e}") from e
 
     data['scrapedOn'] = now
     data['source'] = 'NHL Play-by-Play API'
     return data
 
 @lru_cache(maxsize=1000)
-def scrapePlays(game: Union[str, int], addGoalReplayData: bool = False, output_format: str = "pandas") -> pd.DataFrame | pl.DataFrame:
+def scrapePlays(game: str | int, addGoalReplayData: bool = False, output_format: str = "pandas") -> pd.DataFrame | pl.DataFrame:
     """
     Scrapes NHL game data from API for a given game ID.
 
@@ -737,7 +722,7 @@ def scrapePlays(game: Union[str, int], addGoalReplayData: bool = False, output_f
     return json_normalize(plays, output_format)
 
 
-def scrapeHtmlPbp(game: Union[str, int]) -> Dict:
+def scrapeHtmlPbp(game: str | int) -> dict:
     """
     Synchronously fetches NHL play-by-play data from HTML for a given game ID.
 
@@ -749,7 +734,7 @@ def scrapeHtmlPbp(game: Union[str, int]) -> Dict:
     """
     game_id = str(game)
 
-    
+
     short_id = game_id[-6:].zfill(6)
     first_year = game_id[:4]
     second_year = str(int(first_year) + 1)
@@ -757,31 +742,33 @@ def scrapeHtmlPbp(game: Union[str, int]) -> Dict:
     url = f"https://www.nhl.com/scores/htmlreports/{first_year}{second_year}/PL{short_id}.HTM"
 
     # print(f"Fetching play-by-play HTML data for game: {game_id}")
-    
+
 
     try:
         # Fetch both home and away team HTML play-by-play data
         game_html = fetch_html(url)
 
         if not game_html:
-            raise ValueError(f"No HTML play-by-play data found for game {game_id}")
+            raise InvalidGameError(f"No HTML play-by-play data found for game {game_id}")
 
         # Return structured data with keys expected by pipeline
         result = {
             "data": game_html,
             "urls": {"home": url, "away": url},
             "game_id": game_id,
-            "scraped_on": datetime.utcnow().isoformat(),
+            "scraped_on": datetime.now(timezone.utc).isoformat(),
             "source": "NHL HTML Play-by-Play Reports",
         }
 
         # print(f"✅ Successfully fetched HTML play-by-play data for game {game_id}")
         return result
 
+    except InvalidGameError:
+        raise
     except Exception as e:
-        raise RuntimeError(f"Error fetching HTML play-by-play data for game {game_id}: {e}")
+        raise InvalidGameError(f"Error fetching HTML play-by-play data for game {game_id}: {e}")
 
-async def scrapeHtmlPbp_async(game: Union[str, int]) -> Dict:
+async def scrapeHtmlPbp_async(game: str | int) -> dict:
     """
     Asynchronously fetches NHL play-by-play data from HTML for a given game ID.
 
@@ -793,7 +780,7 @@ async def scrapeHtmlPbp_async(game: Union[str, int]) -> Dict:
     """
     game_id = str(game)
 
-    
+
     short_id = game_id[-6:].zfill(6)
     first_year = game_id[:4]
     second_year = str(int(first_year) + 1)
@@ -801,7 +788,7 @@ async def scrapeHtmlPbp_async(game: Union[str, int]) -> Dict:
     url = f"https://www.nhl.com/scores/htmlreports/{first_year}{second_year}/PL{short_id}.HTM"
 
     # print(f"Fetching play-by-play HTML data for game: {game_id}")
-    
+
 
     try:
         # Fetch both home and away team HTML play-by-play data
@@ -815,7 +802,7 @@ async def scrapeHtmlPbp_async(game: Union[str, int]) -> Dict:
             "data": game_html,
             "urls": {"home": url, "away": url},
             "game_id": game_id,
-            "scraped_on": datetime.utcnow().isoformat(),
+            "scraped_on": datetime.now(timezone.utc).isoformat(),
             "source": "NHL HTML Play-by-Play Reports",
         }
 
@@ -823,10 +810,10 @@ async def scrapeHtmlPbp_async(game: Union[str, int]) -> Dict:
         return result
 
     except Exception as e:
-        raise RuntimeError(f"Error fetching HTML play-by-play data for game {game_id}: {e}")
-  
-  
-def scrapeHTMLShifts(game: Union[str, int]) -> Dict:
+        raise APIError(f"Error fetching HTML play-by-play data for game {game_id}: {e}") from e
+
+
+def scrapeHTMLShifts(game: str | int) -> dict:
     """
     Scrapes NHL shifts data from HTML for a given game ID.
 
@@ -867,7 +854,7 @@ def scrapeHTMLShifts(game: Union[str, int]) -> Dict:
             "away": html_away,
             "urls": {"home": url_home, "away": url_away},
             "game_id": game_id,
-            "scraped_on": datetime.utcnow().isoformat(),
+            "scraped_on": datetime.now(timezone.utc).isoformat(),
             "source": "NHL HTML Shifts Reports",
         }
 
@@ -875,9 +862,9 @@ def scrapeHTMLShifts(game: Union[str, int]) -> Dict:
         return result
 
     except Exception as e:
-        raise RuntimeError(f"Error fetching HTML shifts data for game {game_id}: {e}")  
+        raise APIError(f"Error fetching HTML shifts data for game {game_id}: {e}") from e
 
-async def scrapeHTMLShifts_async(game: Union[str, int]) -> Dict:
+async def scrapeHTMLShifts_async(game: str | int) -> dict:
     """
     Async version: Scrapes NHL shifts data from HTML for a given game ID.
 
@@ -918,7 +905,7 @@ async def scrapeHTMLShifts_async(game: Union[str, int]) -> Dict:
             "away": html_away,
             "urls": {"home": url_home, "away": url_away},
             "game_id": game_id,
-            "scraped_on": datetime.utcnow().isoformat(),
+            "scraped_on": datetime.now(timezone.utc).isoformat(),
             "source": "NHL HTML Shifts Reports",
         }
 
@@ -926,10 +913,10 @@ async def scrapeHTMLShifts_async(game: Union[str, int]) -> Dict:
         return result
 
     except Exception as e:
-        raise RuntimeError(f"Error fetching HTML shifts data for game {game_id}: {e}")  
+        raise APIError(f"Error fetching HTML shifts data for game {game_id}: {e}") from e
 
 # Parse HTML PBP using Lexbor
-def parse_html_pbp(html: str) -> Dict[str, Any]:
+def parse_html_pbp(html: str) -> dict[str, Any]:
     """
     Parse HTML content using Lexbor HTML parser to extract PBP event data and on-ice info.
 
@@ -997,10 +984,10 @@ def parse_html_pbp(html: str) -> Dict[str, Any]:
         }
 
     except Exception as e:
-        raise RuntimeError(f"Error parsing HTML play-by-play data: {e}")
+        raise ParsingError(f"Error parsing HTML play-by-play data: {e}") from e
 
 
-def _parse_on_ice_players(on_ice_raw: List[str]) -> tuple[List[List[str]], List[List[str]]]:
+def _parse_on_ice_players(on_ice_raw: list[str]) -> tuple[list[list[str]], list[list[str]]]:
     """
     Parse on-ice player strings to extract skater and goalie numbers.
 
@@ -1039,7 +1026,7 @@ def _parse_on_ice_players(on_ice_raw: List[str]) -> tuple[List[List[str]], List[
     return skater_lists, goalie_lists
 
 
-def _clean_cell_data(cells: List[str]) -> List[str]:
+def _clean_cell_data(cells: list[str]) -> list[str]:
     """
     Clean and validate cell data from play-by-play rows.
 
@@ -1054,7 +1041,7 @@ def _clean_cell_data(cells: List[str]) -> List[str]:
 
     # Clean each cell and take first 6 columns
     cleaned_cells = []
-    for i, cell in enumerate(cells[:6]):  # Limit to 6 columns
+    for _i, cell in enumerate(cells[:6]):  # Limit to 6 columns
         if cell:
             # Replace various types of non-breaking spaces and clean
             cleaned_cell = (
@@ -1071,7 +1058,7 @@ def _clean_cell_data(cells: List[str]) -> List[str]:
     return cleaned_cells
 
 
-def _empty_result() -> Dict[str, Any]:
+def _empty_result() -> dict[str, Any]:
     """Return empty result structure when no data is found."""
     return {
         "data": [],
@@ -1083,7 +1070,7 @@ def _empty_result() -> Dict[str, Any]:
     }
 
 
-def parse_html_rosters(html: str) -> Dict[str, Any]:
+def parse_html_rosters(html: str) -> dict[str, Any]:
     """
     Parse HTML content to extract NHL game roster information.
 
@@ -1120,11 +1107,10 @@ def parse_html_rosters(html: str) -> Dict[str, Any]:
         raise ValueError(f"Failed to parse roster HTML: {e}")
 
 
-def _parse_game_info(parser: LexborHTMLParser) -> Dict[str, str]:
+def _parse_game_info(parser: LexborHTMLParser) -> dict[str, str]:
     """Extract game information from the HTML."""
     try:
         import re
-        from datetime import datetime
 
         # Game info is typically in a table with ID "GameInfo"
         game_info = {}
@@ -1276,7 +1262,7 @@ def _parse_game_info(parser: LexborHTMLParser) -> Dict[str, str]:
         return {}
 
 
-def _parse_team_roster(parser: LexborHTMLParser, team: str) -> Dict[str, Any]:
+def _parse_team_roster(parser: LexborHTMLParser, team: str) -> dict[str, Any]:
     """Extract roster information for a specific team."""
     try:
         team_data = {"roster": [], "scratches": [], "head_coach": "", "goalies": [], "skaters": []}
@@ -1404,7 +1390,7 @@ def _parse_team_roster(parser: LexborHTMLParser, team: str) -> Dict[str, Any]:
         return {"roster": [], "scratches": [], "head_coach": "", "goalies": [], "skaters": []}
 
 
-def _parse_officials(parser: LexborHTMLParser) -> Dict[str, List[str]]:
+def _parse_officials(parser: LexborHTMLParser) -> dict[str, list[str]]:
     """Extract officials information from the HTML."""
     try:
         officials = {"referees": [], "linesmen": [], "standby": []}
@@ -1435,7 +1421,7 @@ def _parse_officials(parser: LexborHTMLParser) -> Dict[str, List[str]]:
         return {"referees": [], "linesmen": [], "standby": []}
 
 
-def parse_html_shifts(html_home: str, html_away: str) -> Dict[str, Any]:
+def parse_html_shifts(html_home: str, html_away: str) -> dict[str, Any]:
     """
     Parse HTML shifts data for both home and away teams.
 
@@ -1465,7 +1451,7 @@ def parse_html_shifts(html_home: str, html_away: str) -> Dict[str, Any]:
         }
     """
 
-    def _parse_team_shifts(html_content: str, team_type: str) -> Dict[str, Any]:
+    def _parse_team_shifts(html_content: str, team_type: str) -> dict[str, Any]:
         """Parse shifts data for a single team."""
         if not html_content or not html_content.strip():
             return {
@@ -1534,7 +1520,7 @@ def parse_html_shifts(html_home: str, html_away: str) -> Dict[str, Any]:
 
             # Match players to their data
             player_shifts_dict = {}
-            for player, player_shifts in zip(players, player_data_groups):
+            for player, player_shifts in zip(players, player_data_groups, strict=False):
                 player_shifts_dict[player] = player_shifts
 
             # Define columns for different data types
@@ -1576,7 +1562,7 @@ def parse_html_shifts(html_home: str, html_away: str) -> Dict[str, Any]:
 
                 # Process individual shifts
                 for shift_row in shift_records:
-                    shift_record = dict(zip(shift_columns, shift_row))
+                    shift_record = dict(zip(shift_columns, shift_row, strict=False))
                     shift_record["player_name"] = player_name
                     shift_record["jersey_number"] = jersey_number
                     shift_record["team_type"] = team_type
@@ -1630,7 +1616,7 @@ def parse_html_shifts(html_home: str, html_away: str) -> Dict[str, Any]:
 
                 # Process summary records
                 for summary_row in summary_records:
-                    summary_record = dict(zip(summary_columns, summary_row))
+                    summary_record = dict(zip(summary_columns, summary_row, strict=False))
                     summary_record["player_name"] = player_name
                     summary_record["jersey_number"] = jersey_number
                     summary_record["team_type"] = team_type
@@ -1704,13 +1690,13 @@ def parse_html_shifts(html_home: str, html_away: str) -> Dict[str, Any]:
             "total_summary_records": (len(home_data["summary"]) + len(away_data["summary"])),
             "home_parsing_successful": home_data["metadata"].get("parsing_successful", False),
             "away_parsing_successful": away_data["metadata"].get("parsing_successful", False),
-            "parsed_on": datetime.utcnow().isoformat() if "datetime" in globals() else None,
+            "parsed_on": datetime.now(timezone.utc).isoformat(),
         },
     }
 
     return result
 
-def _split_time_range(value: Optional[str]) -> pd.Series:
+def _split_time_range(value: str | None) -> pd.Series:
     """Split a time range string like '12:34 15:45' into two zero-padded time strings."""
     if not isinstance(value, str):
         return pd.Series([None, None])
@@ -1727,6 +1713,10 @@ def scrape_html_pbp(game_id: int, return_raw: bool = False) -> pd.DataFrame | tu
     for col in ["home_on_ice", "away_on_ice", "home_goalie", "away_goalie"]:
         df[col] = parsed[col]
     return (df, parsed) if return_raw else df
+
+async def scrape_html_pbp_async(game_id: int, return_raw: bool = False):
+    """Async wrapper around scrape_html_pbp using a background thread."""
+    return await asyncio.to_thread(scrape_html_pbp, game_id, return_raw)
 
 def _map_numbers(list_of_lists: list[Any], roster: pd.DataFrame, key: str) -> list[list[Any]]:
     if not isinstance(list_of_lists, list) or roster.empty:
@@ -1913,15 +1903,27 @@ def add_strengths_to_shifts_events(shifts_events: pd.DataFrame, strengths_df: pd
     """
     Adds gameStrength and detailedGameStrength columns to ON/OFF shift events.
     Uses strengths_by_second output and matches by elapsedTime.
+    Both columns are from the changing player's team perspective (not always the home team).
     """
-    # Map elapsedTime to strength columns
     shifts_events = shifts_events.copy()
     shifts_events["elapsedTime"] = pd.to_numeric(shifts_events["elapsedTime"], errors="coerce").astype("Int64")
-    # Map strengths by elapsedTime (index of strengths_df)
-    shifts_events["gameStrength"] = shifts_events["elapsedTime"].map(strengths_df["team_str_home"])
-    shifts_events["detailedGameStrength"] = shifts_events["elapsedTime"].map(
-        strengths_df["home_strength"].astype(str) + "v" + strengths_df["away_strength"].astype(str)
+
+    # Determine which rows belong to home players (isHome == 1)
+    is_home = shifts_events.get("isHome", pd.Series(1, index=shifts_events.index))
+    is_home = pd.to_numeric(is_home, errors="coerce").fillna(1).astype(int) == 1
+
+    # Build per-second lookup Series for each perspective
+    str_home = strengths_df["team_str_home"]
+    str_away = strengths_df["team_str_away"] if "team_str_away" in strengths_df.columns else (
+        strengths_df["away_strength"].astype(str).str.rstrip("*") + "v" +
+        strengths_df["home_strength"].astype(str).str.rstrip("*")
     )
+    det_home = strengths_df["home_strength"].astype(str) + "v" + strengths_df["away_strength"].astype(str)
+    det_away = strengths_df["away_strength"].astype(str) + "v" + strengths_df["home_strength"].astype(str)
+
+    elapsed = shifts_events["elapsedTime"]
+    shifts_events["gameStrength"] = elapsed.map(str_home).where(is_home, elapsed.map(str_away))
+    shifts_events["detailedGameStrength"] = elapsed.map(det_home).where(is_home, elapsed.map(det_away))
     return shifts_events
 
 def build_strength_segments_from_shifts(shifts: pd.DataFrame) -> pd.DataFrame:
@@ -1989,10 +1991,12 @@ def build_strength_segments_from_shifts(shifts: pd.DataFrame) -> pd.DataFrame:
 
 def strengths_by_second_from_segments(segments: pd.DataFrame) -> pd.DataFrame:
     """Expand compact strength segments to a per-second index for joining with events/shifts.
-    Index = elapsedTime; columns: team_str_home, home_strength, away_strength.
+    Index = elapsedTime; columns: team_str_home, team_str_away, home_strength, away_strength.
+    team_str_home is from the home team's perspective (e.g. "5v4" when home has the PP).
+    team_str_away is from the away team's perspective (e.g. "4v5" in the same situation).
     """
     if segments.empty:
-        return pd.DataFrame(columns=["team_str_home","home_strength","away_strength"]).astype({})
+        return pd.DataFrame(columns=["team_str_home","team_str_away","home_strength","away_strength"]).astype({})
 
     rows = []
     for _, r in segments.iterrows():
@@ -2001,10 +2005,11 @@ def strengths_by_second_from_segments(segments: pd.DataFrame) -> pd.DataFrame:
         home_s = f"{home}{'*' if int(r['pulled_home']) else ''}"
         away_s = f"{away}{'*' if int(r['pulled_away']) else ''}"
         team_str_home = f"{home}v{away}"
+        team_str_away = f"{away}v{home}"
         for t in range(int(r["t_start"]), int(r["t_end"])):
-            rows.append((t, team_str_home, home_s, away_s))
+            rows.append((t, team_str_home, team_str_away, home_s, away_s))
     out = (
-        pd.DataFrame(rows, columns=["elapsedTime","team_str_home","home_strength","away_strength"])
+        pd.DataFrame(rows, columns=["elapsedTime","team_str_home","team_str_away","home_strength","away_strength"])
         .set_index("elapsedTime")
         .sort_index()
     )
@@ -2058,7 +2063,7 @@ def build_on_ice_long(df: pd.DataFrame) -> pd.DataFrame:
             if len(names) < len(ids):
                 names = names + [None] * (len(ids) - len(names))
 
-            for slot, (pid, pname) in enumerate(zip(ids, names), start=1):
+            for slot, (pid, pname) in enumerate(zip(ids, names, strict=False), start=1):
                 records.append({
                     "gameId": row.get("gameId", pd.NA),
                     "elapsedTime": row.get("elapsedTime", pd.NA),
@@ -2112,6 +2117,7 @@ def build_on_ice_wide(
           home_goalie_id, home_goalie_name, away_goalie_id, away_goalie_name
     """
     import ast
+
     import numpy as np
 
     def _ensure_list(x):
@@ -2154,7 +2160,7 @@ def build_on_ice_wide(
             goalie_names = _ensure_list(row.get(f"{side}Goalie_on_full_name"))
 
             # Build id->name lookup when lengths differ
-            id_name_pairs = list(zip(ids_all, names_all))
+            id_name_pairs = list(zip(ids_all, names_all, strict=False))
             id_to_name = {pid: pname for pid, pname in id_name_pairs if pid is not None}
 
             # Remove goalies from skater lists if a separate goalie list exists
@@ -2207,11 +2213,11 @@ def build_on_ice_wide(
 
     return out_df
 
-def scrape_game(game_id:Union[int,str],
+def scrape_game(game_id:int | str,
                 addGoalReplayData: bool = False,
                 include_tuple = False
-                
-                ) -> pd.DataFrame | tuple[pd.DataFrame, Dict[str, Any]]:
+
+                ) -> pd.DataFrame | tuple[pd.DataFrame, dict[str, Any]]:
     """Scrape and parse all data for a given NHL game ID.
     Args:
         game_id (int | str): The NHL game ID to scrape.
@@ -2237,7 +2243,7 @@ def scrape_game(game_id:Union[int,str],
     "easternUTCOffset": api.get("easternUTCOffset"),
     "venueUTCOffset": api.get("venueUTCOffset"),
     # stamp these here; they’re not in the API payload
-    "scrapedOn": datetime.utcnow().isoformat(),
+    "scrapedOn": datetime.now(timezone.utc).isoformat(),
     "source": "NHL Play-by-Play API",
     }
     pbp = pd.json_normalize(api.get("plays", []), sep=".")
@@ -2249,19 +2255,24 @@ def scrape_game(game_id:Union[int,str],
     home_abbrev = api.get("homeTeam", {}).get("abbrev")
     away_abbrev = api.get("awayTeam", {}).get("abbrev")
     rosters["isHome"] = (rosters["teamId"] == home_id).astype(int)
-    rosters["fullName"] = rosters["firstName.default"] + " " + rosters["lastName.default"] 
+    rosters["fullName"] = rosters["firstName.default"] + " " + rosters["lastName.default"]
     shifts = scrape_shifts(game_id=game_id)
     shifts_events = build_shifts_events(shifts)
-    
+
     # flatten API
     pbp.columns = (pbp.columns
                    .str.replace(r"^details\.", "", regex=True)
                    .str.replace(r"^periodDescriptor\.", "", regex=True))
     pbp = pbp.rename(columns={"number": "period", "typeDescKey": "api_event"})
+
+    # Ensure eventOwnerTeamId exists, add it if missing
+    if "eventOwnerTeamId" not in pbp.columns:
+        pbp["eventOwnerTeamId"] = pd.NA
+
     pbp["isHome"] = (pbp["eventOwnerTeamId"] == home_id).astype(int)
     pbp["eventTeam"] = pbp["isHome"].map({1: home_abbrev, 0: away_abbrev})
     pbp["html_event"] = pbp["api_event"].map(EVENT_MAPPING)
-    pbp["Event"] = pbp["html_event"] # 
+    pbp["Event"] = pbp["html_event"] #
 
     # dtype normalization
     for col in ["Event","Per","Time"]:
@@ -2290,7 +2301,7 @@ def scrape_game(game_id:Union[int,str],
     right_on = ["Event","period","timeInPeriod","merge_idx"]
     df = df_html.merge(pbp, left_on=left_on, right_on=right_on, how="left", suffixes=("","_api"))
     df.columns = _dedup_cols(df.columns)
-    
+
 
     # on-ice mappings
     home_r = rosters.query("isHome == 1")
@@ -2313,8 +2324,8 @@ def scrape_game(game_id:Union[int,str],
     df["n_away_skaters"] = df["away_on_count"].sub(df["awayGoalie_on_count"].clip(upper=1))
     df["pulled_home"] = (df["homeGoalie_on_count"] == 0).astype("Int8")
     df["pulled_away"] = (df["awayGoalie_on_count"] == 0).astype("Int8")
-    
-    
+
+
     # compact strength strings
     is_home = df["isHome"].astype(bool)
     home_str = df["home_on_count"].astype("Int64").astype("string")
@@ -2327,23 +2338,25 @@ def scrape_game(game_id:Union[int,str],
     det_right = away_strength.where(is_home, home_strength)
     m_valid = df["home_on_count"].gt(0) & df["away_on_count"].gt(0)
     df.loc[m_valid, ["home_strength","away_strength","gameStrength","detailedGameStrength"]] = pd.DataFrame({
-        "home_strength": det_left[m_valid],
-        "away_strength": det_right[m_valid],
+        "home_strength": home_strength[m_valid],
+        "away_strength": away_strength[m_valid],
         "gameStrength": game_left[m_valid].str.cat(game_right[m_valid], sep="v"),
         "detailedGameStrength": det_left[m_valid].str.cat(det_right[m_valid], sep="v"),
     })
-    
+
     df["Per"] = pd.to_numeric(df["Per"], errors="coerce").astype("Int16")
     df["timeInPeriodSec"] = pd.to_numeric(df["timeInPeriodSec"], errors="coerce").astype("Int16")
 
     tip = df["timeInPeriodSec"].astype("Int64")   # allow NA
     per = df["Per"].astype("Int64")
 
-    # Compute elapsed for all non-shootout periods; ignore gameType entirely
-    mask_reg_ot = per.ne(5) & tip.notna() & per.notna()
+    # In playoff games (gameType == 3) period 5 is 2nd OT; in regular season it
+    # is the shootout (no clock time).  Only exclude period 5 for regular season.
+    is_playoff = api.get("gameType") in (3, "3")
+    mask_reg_ot = (per.ne(5) | is_playoff) & tip.notna() & per.notna()
     df.loc[mask_reg_ot, "elapsedTime"] = tip[mask_reg_ot] + (per[mask_reg_ot] - 1) * 1200
 
-    
+
 
     # player assignment by event type
     for c in ("player1Id","player2Id","player3Id"):
@@ -2374,7 +2387,7 @@ def scrape_game(game_id:Union[int,str],
     for i in (1,2,3):
         df[f"player{i}Id"] = df[f"player{i}Id"].astype("Int64")
         df[f"player{i}Name"] = df[f"player{i}Id"].map(name_map)
-        
+
     # 1) Build compact strength segments from shifts and expand per-second only for join
     df.columns = _dedup_cols(df.columns)
     shifts_events.columns = _dedup_cols(shifts_events.columns)
@@ -2384,16 +2397,48 @@ def scrape_game(game_id:Union[int,str],
     # 2) Add strengths to ON/OFF shift events using the per-second index
     shifts_events = add_strengths_to_shifts_events(shifts_events, strengths_df)
 
+    # 2.5) Add zone start qualifiers to ON events
+    # Ensure df has gameId column for zone start analysis
+    if "gameId" not in df.columns:
+        df["gameId"] = game_id
+
+    # Filter for ON events only
+    on_events = shifts_events[shifts_events["Event"] == "ON"].copy()
+    if len(on_events) > 0:
+        # Add attack_sign column based on team
+        # attack_sign is +1 if team attacks to +x (home team in NHL coords), -1 if attacks to -x
+        on_events["attack_sign"] = on_events["isHome"].map({1: 1, 0: -1})
+
+        # Apply zone start qualifiers
+        on_events_with_zones = add_on_event_shift_start_qualifiers(
+            on_events,
+            df,
+            game_col="gameId",
+            period_col="Per",
+            start_time_col="timeInPeriodSec",
+            pbp_time_col="timeInPeriodSec",
+            pbp_type_col="Event",
+            pbp_x_col="xCoord",
+            pbp_y_col="yCoord",
+            attack_sign_col="attack_sign"
+        )
+
+        # Update shifts_events with the new zone start columns
+        zone_cols = ["shift_start_type", "start_dot", "start_zone"]
+        for col in zone_cols:
+            if col in on_events_with_zones.columns:
+                shifts_events.loc[shifts_events["Event"] == "ON", col] = on_events_with_zones[col].values
+
     # 3) Concatenate pbp and shifts_events
     # pbp.columns = _dedup_cols(pbp.columns)
     shifts_events.columns = _dedup_cols(shifts_events.columns)
     data = pd.concat([df, shifts_events], ignore_index=True)
-    
+
     dups = data.columns[data.columns.duplicated()].tolist()
     if dups:
         LOG.warning(f"Duplicate columns detected: {dups}")
     data.columns = _dedup_cols(data.columns)
-    
+
     # Stable event ordering
     sort_priority = {
         "PGSTR": 1, "PGEND": 2, "ANTHEM": 3, "EGT": 3, "CHL": 3, "DELPEN": 3,
@@ -2412,33 +2457,33 @@ def scrape_game(game_id:Union[int,str],
                 .rename(columns={"eventOwnerTeamId":"teamId_",
                                 #  "Per":"period",
                                  "Str":"strength","api_event":"event_api"}))
-    
+
 
     # attach goalie flag if present
     if {"playerId","positionCode"}.issubset(shifts.columns):
         goalies = shifts.rename(columns={"playerId":"player1Id"})[["player1Id","positionCode"]]
         goalies["isGoalie"] = pd.to_numeric(goalies["positionCode"].eq("G"), errors="coerce").fillna(0).astype(int)
         data = data.merge(goalies[["player1Id","isGoalie"]].drop_duplicates(), on=["player1Id", "isGoalie"], how="left")
-        
-        
+
+
     # Attach game-level metadata (constant across rows)
     for k, v in _meta_vals.items():
         data[k] = v
 
-        
+
     # drop shift columns that are not relevant anymore shift_number	event	player_name	jersey_number	team_type	team_name	duration_seconds	sweaterNumber	positionCode	headshot
     shift_cols = ["shift_number","event","player_name","jersey_number","team_type","team_name","duration_seconds","sweaterNumber","positionCode","headshot"]
     data = data.drop(columns=shift_cols, errors="ignore")
-    
-    home_abbrev = data["homeTeam"].dropna().iloc[0] if "homeTeam" in data.columns else ""
-    away_abbrev = data["awayTeam"].dropna().iloc[0] if "awayTeam" in data.columns else ""
-    
+
+    # Use home_abbrev and away_abbrev from API (already set from api.get("homeTeam", {}).get("abbrev"))
+    # Don't try to extract from DataFrame as it may not have correct values yet
+
     data["eventTeam"] = data["isHome"].map({1: home_abbrev, 0: away_abbrev})
     data["#"] = np.arange(1, len(data) + 1)
-    
+
     data["homeTeam"] = home_abbrev
     data["awayTeam"] = away_abbrev
-    
+
     for c in ["awaySOG","homeSOG","homeScore","awayScore"]:
         if c not in data.columns:
             data[c] = pd.NA
@@ -2446,19 +2491,19 @@ def scrape_game(game_id:Union[int,str],
 
     # Prefer teamId_ from API over teamId from shifts if available
     data.loc[data['teamId'].isna() & data['teamId_'].notnull(), 'teamId'] = data.loc[data['teamId'].isna() & data['teamId_'].notnull(), 'teamId_']
-    
-    
+
+
 
     # Dynamically build a result tuple
     fields = ["data"]
     values = [data]
-    
+
     # df_html, pbp, rosters, home_id, home_abbrev, away_abbrev, shifts_events, html_meta, df, data
     dups = data.columns[data.columns.duplicated()].tolist()
     if dups:
         LOG.warning(f"Duplicate columns detected: {dups}")
     data.columns = _dedup_cols(data.columns)
-    
+
     # If include_tuple, then return the tuple
     if include_tuple:
         fields.append("shifts")
@@ -2470,19 +2515,19 @@ def scrape_game(game_id:Union[int,str],
         fields.append("awayTeam")
         values.append(away_abbrev)
         GameResult = namedtuple("GameResult", fields)
-        
+
         return GameResult(*values)
-    
+
     if len(fields) == 1:
         return data
-    
 
-async def scrape_game_async(game_id:Union[int,str],
+
+async def scrape_game_async(game_id:int | str,
                       addGoalReplayData: bool = False,
                       include_rosters: bool = False,
                       include_shifts: bool = False,
                       include_seconds_matrix: bool = False,
-                      include_strengths: bool = False) -> pd.DataFrame | tuple[pd.DataFrame, Dict[str, Any]]:
+                      include_strengths: bool = False) -> pd.DataFrame | tuple[pd.DataFrame, dict[str, Any]]:
     """Scrape and parse all data for a given NHL game ID.
 
     Args:
@@ -2491,16 +2536,16 @@ async def scrape_game_async(game_id:Union[int,str],
     Returns:
         pd.DataFrame: The scraped and parsed game data.
     """
-    
+
     # HTML PBP Manips
-    df_html, html_meta = await scrape_html_pbp(game_id, return_raw=True)
+    df_html, html_meta = await scrape_html_pbp_async(game_id, return_raw=True)
     if "Time" not in df_html.columns and "timeInPeriod" in df_html.columns:
         df_html = df_html.rename(columns={"timeInPeriod": "Time"})
     required_html = {"Event", "Per", "Time"}
     missing = required_html - set(df_html.columns)
     if missing:
         raise KeyError(f"HTML PBP missing required columns: {missing}")
-    
+
     api = getGameData(game_id, addGoalReplayData=addGoalReplayData)
     pbp = pd.json_normalize(api.get("plays", []), sep=".")
     # Ensure unique column names to avoid InvalidIndexError on concat/merge
@@ -2512,13 +2557,13 @@ async def scrape_game_async(game_id:Union[int,str],
     away_abbrev = api.get("awayTeam", {}).get("abbrev")
     rosters["isHome"] = (rosters["teamId"] == home_id).astype(int)
     rosters["fullName"] = rosters["firstName.default"] + " " + rosters["lastName.default"]
-    
-    
-    # Shifts 
-    shifts = await scrape_shifts(game_id=game_id)
+
+
+    # Shifts
+    shifts = await scrape_shifts_async(game_id=game_id)
     shifts_events = build_shifts_events(shifts)
-    
-    
+
+
     # flatten API
     pbp.columns = (pbp.columns
                    .str.replace(r"^details\.", "", regex=True)
@@ -2527,7 +2572,7 @@ async def scrape_game_async(game_id:Union[int,str],
     pbp["isHome"] = (pbp["eventOwnerTeamId"] == home_id).astype(int)
     pbp["eventTeam"] = pbp["isHome"].map({1: home_abbrev, 0: away_abbrev})
     pbp["html_event"] = pbp["api_event"].map(EVENT_MAPPING)
-    pbp["Event"] = pbp["html_event"] # 
+    pbp["Event"] = pbp["html_event"] #
 
     # dtype normalization
     for col in ["Event","Per","Time"]:
@@ -2556,7 +2601,7 @@ async def scrape_game_async(game_id:Union[int,str],
     right_on = ["html_event","period","timeInPeriod","merge_idx"]
     df = df_html.merge(pbp, left_on=left_on, right_on=right_on, how="left", suffixes=("","_api"))
     df.columns = _dedup_cols(df.columns)
-    
+
 
     # on-ice mappings
     home_r = rosters.query("isHome == 1")
@@ -2579,8 +2624,8 @@ async def scrape_game_async(game_id:Union[int,str],
     df["n_away_skaters"] = df["away_on_count"].sub(df["awayGoalie_on_count"].clip(upper=1))
     df["pulled_home"] = (df["homeGoalie_on_count"] == 0).astype("Int8")
     df["pulled_away"] = (df["awayGoalie_on_count"] == 0).astype("Int8")
-    
-    
+
+
     # compact strength strings
     is_home = df["isHome"].astype(bool)
     home_str = df["home_on_count"].astype("Int64").astype("string")
@@ -2593,12 +2638,12 @@ async def scrape_game_async(game_id:Union[int,str],
     det_right = away_strength.where(is_home, home_strength)
     m_valid = df["home_on_count"].gt(0) & df["away_on_count"].gt(0)
     df.loc[m_valid, ["home_strength","away_strength","gameStrength","detailedGameStrength"]] = pd.DataFrame({
-        "home_strength": det_left[m_valid],
-        "away_strength": det_right[m_valid],
+        "home_strength": home_strength[m_valid],
+        "away_strength": away_strength[m_valid],
         "gameStrength": game_left[m_valid].str.cat(game_right[m_valid], sep="v"),
         "detailedGameStrength": det_left[m_valid].str.cat(det_right[m_valid], sep="v"),
     })
-    
+
     # If you want a tidy on-ice table for SQL, call: on_ice_long = build_on_ice_long(df)
 
     # elapsed time
@@ -2609,17 +2654,11 @@ async def scrape_game_async(game_id:Union[int,str],
     tip = df["timeInPeriodSec"].astype("Int64")   # allow NA
     per = df["Per"].astype("Int64")
 
-    # Compute elapsed for all non-shootout periods; ignore gameType entirely
-    mask_reg_ot = per.ne(5) & tip.notna() & per.notna()
+    # In playoff games (gameType == 3) period 5 is 2nd OT; in regular season it
+    # is the shootout (no clock time).  Only exclude period 5 for regular season.
+    is_playoff = api.get("gameType") in (3, "3")
+    mask_reg_ot = (per.ne(5) | is_playoff) & tip.notna() & per.notna()
     df.loc[mask_reg_ot, "elapsedTime"] = tip[mask_reg_ot] + (per[mask_reg_ot] - 1) * 1200
-
-    # (optional) leave shootout rows as NA or set them to last-reg-time + small offsets if you prefer
-    # so_mask = per.eq(5) & tip.notna()
-    # df.loc[so_mask, "elapsedTime"] = df["elapsedTime"].max()
-
-    # Avoid blanket fillna(0) which hides missing-computation issues
-    # If you really need zeros for display, do it only at the end of your notebook:
-    # df["elapsedTime"] = df["elapsedTime"].fillna(0)
 
     # player assignment by event type
     for c in ("player1Id","player2Id","player3Id"):
@@ -2650,7 +2689,7 @@ async def scrape_game_async(game_id:Union[int,str],
     for i in (1,2,3):
         df[f"player{i}Id"] = df[f"player{i}Id"].astype("Int64")
         df[f"player{i}Name"] = df[f"player{i}Id"].map(name_map)
-        
+
     # 1) Build compact strength segments from shifts and expand per-second only for join
     df.columns = _dedup_cols(df.columns)
     shifts_events.columns = _dedup_cols(shifts_events.columns)
@@ -2659,6 +2698,38 @@ async def scrape_game_async(game_id:Union[int,str],
 
     # 2) Add strengths to ON/OFF shift events using the per-second index
     shifts_events = add_strengths_to_shifts_events(shifts_events, strengths_df)
+
+    # 2.5) Add zone start qualifiers to ON events
+    # Ensure df has gameId column for zone start analysis
+    if "gameId" not in df.columns:
+        df["gameId"] = game_id
+
+    # Filter for ON events only
+    on_events = shifts_events[shifts_events["Event"] == "ON"].copy()
+    if len(on_events) > 0:
+        # Add attack_sign column based on team
+        # attack_sign is +1 if team attacks to +x (home team in NHL coords), -1 if attacks to -x
+        on_events["attack_sign"] = on_events["isHome"].map({1: 1, 0: -1})
+
+        # Apply zone start qualifiers
+        on_events_with_zones = add_on_event_shift_start_qualifiers(
+            on_events,
+            df,
+            game_col="gameId",
+            period_col="Per",
+            start_time_col="timeInPeriodSec",
+            pbp_time_col="timeInPeriodSec",
+            pbp_type_col="Event",
+            pbp_x_col="xCoord",
+            pbp_y_col="yCoord",
+            attack_sign_col="attack_sign"
+        )
+
+        # Update shifts_events with the new zone start columns
+        zone_cols = ["shift_start_type", "start_dot", "start_zone"]
+        for col in zone_cols:
+            if col in on_events_with_zones.columns:
+                shifts_events.loc[shifts_events["Event"] == "ON", col] = on_events_with_zones[col].values
 
     # 3) Concatenate pbp and shifts_events
     # pbp.columns = _dedup_cols(pbp.columns)
@@ -2683,15 +2754,15 @@ async def scrape_game_async(game_id:Union[int,str],
                 .rename(columns={"eventOwnerTeamId":"teamId_",
                                 #  "Per":"period",
                                  "Str":"strength","api_event":"event_api"}))
-    
+
 
     # attach goalie flag if present
     if {"playerId","positionCode"}.issubset(shifts.columns):
         goalies = shifts.rename(columns={"playerId":"player1Id"})[["player1Id","positionCode"]]
         goalies["isGoalie"] = pd.to_numeric(goalies["positionCode"].eq("G"), errors="coerce").fillna(0).astype(int)
         data = data.merge(goalies[["player1Id","isGoalie"]].drop_duplicates(), on=["player1Id", "isGoalie"], how="left")
-        
-        
+
+
     # do fills for those cols [gameId	venue	venueLocation	scrapedOn	source	gameDate	gameType	startTimeUTC	easternUTCOffset	venueUTCOffset]
     meta_cols = ["gameId","venue","venueLocation","scrapedOn","source","gameDate","gameType","startTimeUTC","easternUTCOffset","venueUTCOffset"]
     for col in meta_cols:
@@ -2701,27 +2772,27 @@ async def scrape_game_async(game_id:Union[int,str],
             col_val = None
         data[col] = col_val
 
-        
+
     # drop shift columns that are not relevant anymore shift_number	event	player_name	jersey_number	team_type	team_name	duration_seconds	sweaterNumber	positionCode	headshot
     shift_cols = ["shift_number","event","player_name","jersey_number","team_type","team_name","duration_seconds","sweaterNumber","positionCode","headshot"]
     data = data.drop(columns=shift_cols, errors="ignore")
-    
+
     home_abbrev = data["homeTeam"].dropna().iloc[0] if "homeTeam" in data.columns else ""
     away_abbrev = data["awayTeam"].dropna().iloc[0] if "awayTeam" in data.columns else ""
-    
+
     data["eventTeam"] = data["isHome"].map({1: home_abbrev, 0: away_abbrev})
     data["#"] = np.arange(1, len(data) + 1)
-    
+
     data["homeTeam"] = home_abbrev
     data["awayTeam"] = away_abbrev
-    
+
     # Prefer teamId_ from API over teamId from shifts if available
     data.loc[data['teamId'].isna() & data['teamId_'].notnull(), 'teamId'] = data.loc[data['teamId'].isna() & data['teamId_'].notnull(), 'teamId_']
 
     # Dynamically build a result tuple
     fields = ["data"]
     values = [data]
-    
+
     if include_shifts:
         fields.append("shifts")
         values.append(shifts)
@@ -2729,18 +2800,19 @@ async def scrape_game_async(game_id:Union[int,str],
         fields.append("rosters")
         values.append(rosters)
     if include_seconds_matrix:
+        matrix_df = seconds_matrix(data, shifts)
         fields.append("matrix")
         values.append(matrix_df)
     if include_strengths:
         fields.append("strengths")
         values.append(strengths_df)
-    
+
     if len(fields) == 1:
         return data
-    
+
     GameResult = namedtuple("GameResult", fields)
     return GameResult(*values)
-    
+
 def seconds_matrix(df: pd.DataFrame, shifts: pd.DataFrame) -> pd.DataFrame:
     """
     Boolean on-ice matrix by second.
@@ -2974,7 +3046,7 @@ def shared_toi_opponents_by_strength(
 
     # pair both team strings per second
     pair_series = pd.Series(
-        list(zip(strengths_df["team_str_home"], strengths_df["team_str_away"])),
+        list(zip(strengths_df["team_str_home"], strengths_df["team_str_away"], strict=False)),
         index=strengths_df.index
     )
     groups = {k: idxs for k, idxs in pair_series.groupby(pair_series).groups.items()
@@ -3020,7 +3092,7 @@ def shared_toi_opponents_by_strength(
 # --- small utilities ---------------------------------------------------------
 def _expand_mi_tuple(mi_tuple, names, prefix):
     """Expand a MultiIndex tuple -> dict of {f'{prefix}_{name}': value}."""
-    return {f"{prefix}_{n}": v for n, v in zip(names, mi_tuple)}
+    return {f"{prefix}_{n}": v for n, v in zip(names, mi_tuple, strict=False)}
 
 def _mk_rows_df(keys, counts, idx_names, member_prefix="p"):
     """
@@ -3028,7 +3100,7 @@ def _mk_rows_df(keys, counts, idx_names, member_prefix="p"):
     returns long dataframe with p1_*, p2_*, ... + Strength + TOI
     """
     rows = []
-    for (strength, combo_pos), sec in zip(keys, counts):
+    for (strength, combo_pos), sec in zip(keys, counts, strict=False):
         row = {"Strength": strength, "TOI_sec": sec}
         for k, pos in enumerate(combo_pos, start=1):
             row.update(_expand_mi_tuple(pos, idx_names, f"{member_prefix}{k}"))
@@ -3072,14 +3144,14 @@ def combos_teammates_by_strength(
         M_np = M.to_numpy(dtype=bool)
         for label, secs_idx in sec_groups.items():
             secs = np.fromiter(secs_idx, dtype=int)
-            if secs.size == 0: 
+            if secs.size == 0:
                 continue
             sub = M_np[:, secs]                       # P x T'
             # iterate seconds: build combos from active players
             counts = {}
             for t in range(sub.shape[1]):
                 on = np.flatnonzero(sub[:, t])
-                if on.size < N: 
+                if on.size < N:
                     continue
                 for combo in combinations(on.tolist(), N):
                     # represent combo as tuple of MultiIndex tuples (for stable identity)
@@ -3218,11 +3290,11 @@ def combos_opponents_by_strength(
     # aggregate seconds
     # key: (Strength, player_mi_tuple, opp_combo_mi_tuple)
     c = Counter(out_rows)  # each occurrence is 1 second
-    keys, secs = zip(*c.items())
+    keys, secs = zip(*c.items(), strict=False)
 
     # build rows
     records = []
-    for (label, player_mi, opp_combo_mi), sec in zip(keys, secs):
+    for (label, player_mi, opp_combo_mi), sec in zip(keys, secs, strict=False):
         row = {"Strength": label, "TOI_sec": sec}
         row.update(_expand_mi_tuple(player_mi, idx_names, "player"))
         for k, mi in enumerate(opp_combo_mi, start=1):
@@ -3243,10 +3315,6 @@ def combos_opponents_by_strength(
         df = df[df["TOI"] >= min_seconds]
     return df[ordered].sort_values(["Strength","TOI"], ascending=[True, False]).reset_index(drop=True)
 
-
-# --- small helpers -----------------------------------------------------------
-def _expand_mi_tuple(mi_tuple, names, prefix):
-    return {f"{prefix}_{n}": v for n, v in zip(names, mi_tuple)}
 
 def _build_empty_cols(idx_names, n_team, m_opp):
     cols = [f"p{k}_{n}" for k in range(1, n_team+1) for n in idx_names]
@@ -3295,7 +3363,6 @@ def combo_toi_by_strength(
     idx_all = matrix_df.index
 
     def _process(team_mask, opp_mask, label_series):
-        keys = []
         # precompute indices
         T_idx = np.flatnonzero(team_mask)
         O_idx = np.flatnonzero(opp_mask)
@@ -3327,7 +3394,7 @@ def combo_toi_by_strength(
                 if m_opp == 0:
                     for tc in team_combos:
                         team_key = tuple(idx_all[T_idx[i]] for i in tc)
-                        cnt[(label, team_key, tuple())] += 1
+                        cnt[(label, team_key, ())] += 1
                 else:
                     o_on = np.flatnonzero(O_sub[:, t])
                     if o_on.size < m_opp:
@@ -3519,9 +3586,9 @@ def combo_shot_metrics_by_strength(
                "FenwickFor": vec[2], "FenwickAgainst": vec[3],
                "CorsiFor": vec[4], "CorsiAgainst": vec[5]}
         for i, mi in enumerate(team_keys, start=1):
-            for n, v in zip(idx_names, mi): row[f"p{i}_{n}"] = v
+            for n, v in zip(idx_names, mi, strict=False): row[f"p{i}_{n}"] = v
         for i, mi in enumerate(opp_keys, start=1):
-            for n, v in zip(idx_names, mi): row[f"opp{i}_{n}"] = v
+            for n, v in zip(idx_names, mi, strict=False): row[f"opp{i}_{n}"] = v
         rows.append(row)
 
     if not rows:
@@ -3605,13 +3672,13 @@ def combo_shot_metrics_by_strength(
         ordered += [f"{c}/60" for c in ["ShotsFor","ShotsAgainst","ShotsDifferential",
                                         "FenwickFor","FenwickAgainst","FenwickDifferential",
                                         "CorsiFor","CorsiAgainst","CorsiDifferential"]]
-        
+
 
     # Guarantee all columns exist (edge cases)
     for col in ordered:
         if col not in df.columns: df[col] = pd.NA
-        
-        
+
+
 
     return df[ordered].sort_values(["Strength","CorsiFor","CorsiAgainst"], ascending=[True, False, False]).reset_index(drop=True)
 
@@ -3626,6 +3693,9 @@ def engineer_xg_features(
     shot_like_events_prev: tuple = ("SHOT",),   # previous-event types that can parent a rebound
 ) -> pd.DataFrame:
     """
+    .. deprecated::
+        xG functionality has been sunset. This function will be removed in a future release.
+
     Add all xG feature columns to a copy of pbp_df and return it.
 
     Creates/updates:
@@ -3640,6 +3710,13 @@ def engineer_xg_features(
     pulled_home, pulled_away.
     Missing ones are created as NA and handled gracefully.
     """
+    import warnings
+    warnings.warn(
+        "engineer_xg_features is deprecated and will be removed in a future release. "
+        "xG functionality has been sunset.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     df = pbp_df.copy()
 
     # --- Ensure required columns exist to avoid KeyErrors ---
@@ -3745,7 +3822,7 @@ def engineer_xg_features(
     df.loc[is_play, "previousEventAngleSigned"] = df.loc[is_play].groupby("gameId")["angle_signed"].shift(1)
     df.loc[is_play, "previousEventXNorm"] = df.loc[is_play].groupby("gameId")["x_norm"].shift(1)
     df.loc[is_play, "previousEventYNorm"] = df.loc[is_play].groupby("gameId")["y_norm"].shift(1)
-    
+
 
     df["timeDiff"] = df["elapsedTime"] - df["previousElapsedTime"]
 
@@ -3807,15 +3884,28 @@ def predict_xg_for_pbp(pbp_df: pd.DataFrame,
                        feat_path: str = FEAT_PATH,
                        xg_colname: str = "xG") -> pd.DataFrame:
     """
+    .. deprecated::
+        xG functionality has been sunset. This function will be removed in a future release.
+
     Returns a copy of pbp_df with an 'xG' column filled only for shot rows.
     """
+    import warnings
+    warnings.warn(
+        "predict_xg_for_pbp is deprecated and will be removed in a future release. "
+        "xG functionality has been sunset.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    import joblib  # noqa: F401 (used inside _align_to_training_columns)
+    import xgboost as xgb
+
     # Build design matrix from PBP
     shots, X = build_shots_design_matrix(pbp_df)
 
     # Load model + training feature order
     booster = xgb.Booster()
     booster.load_model(model_path)
-    train_cols = joblib.load(feat_path)  # list of column names used during training (after one-hot)
+    joblib.load(feat_path)  # list of column names used during training (after one-hot)
 
     # Align columns to training (create missing, keep order)
     X_aligned = _align_to_training_columns(X, feat_path)
@@ -3872,10 +3962,20 @@ def _align_to_training_columns(X: pd.DataFrame, feat_path: str) -> pd.DataFrame:
 
 def pipeline(game_id):
     """
+    .. deprecated::
+        xG functionality has been sunset. This function will be removed in a future release.
+
     Full pipeline: scrape game PBP, engineer xG features, predict xG,
     build on-ice wide dataset, and scrape shifts + player info.
     Returns (pbp_with_xg_wide, players_df).
     """
+    import warnings
+    warnings.warn(
+        "pipeline is deprecated and will be removed in a future release. "
+        "xG functionality has been sunset.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
 
     # game_id = 2025020110
 
@@ -3892,7 +3992,7 @@ def pipeline(game_id):
     pbp_with_xg_wide = build_on_ice_wide(pbp_with_xg, max_skaters=6, include_goalie=True, drop_list_cols=False)
     # pbp_with_xg_wide.sample(10)
     return pbp_with_xg_wide, players_df
-    
+
 def toi_by_strength(pbp_change_events: pd.DataFrame) -> pd.DataFrame:
     """
     Calculate total time on ice per game-strength state (e.g., 5v5, 6*v5, 4v6*).
@@ -4030,22 +4130,13 @@ def toi_by_player_and_strength(pbp_change_events: pd.DataFrame) -> pd.DataFrame:
     toi = defaultdict(lambda: defaultdict(float))  # toi[player_id][strength] = seconds
     player_info = {}  # player_id -> (name, team)
 
-    def strength_label(team=None):
-        """
-        Return strength label from the perspective of the given team.
-        If team is None, returns from t1's perspective (for backward compatibility).
-        If team is specified, returns the label showing that team's skaters first.
-        """
+    def strength_label():
         s1 = len(on_ice[t1])
         s2 = len(on_ice[t2])
         g1 = len(goalies[t1]) > 0
         g2 = len(goalies[t2]) > 0
         left  = f"{s1}{'' if g1 else '*'}"
         right = f"{s2}{'' if g2 else '*'}"
-        
-        # If team is specified and it's t2, flip the perspective
-        if team == t2:
-            return f"{right}v{left}"
         return f"{left}v{right}"
 
     prev_t = 0
@@ -4054,8 +4145,8 @@ def toi_by_player_and_strength(pbp_change_events: pd.DataFrame) -> pd.DataFrame:
         # Record time for current strength
         if ts > prev_t:
             dt = ts - prev_t
+            str_label = strength_label()
             for team in [t1, t2]:
-                str_label = strength_label(team)
                 for pid in list(on_ice[team]) + list(goalies[team]):
                     toi[pid][str_label] += dt
         # Apply OFF events
@@ -4083,8 +4174,8 @@ def toi_by_player_and_strength(pbp_change_events: pd.DataFrame) -> pd.DataFrame:
     game_end = int(df['elapsedTime'].max())
     if game_end > prev_t:
         dt = game_end - prev_t
+        str_label = strength_label()
         for team in [t1, t2]:
-            str_label = strength_label(team)
             for pid in list(on_ice[team]) + list(goalies[team]):
                 toi[pid][str_label] += dt
 
@@ -4103,8 +4194,6 @@ def toi_by_player_and_strength(pbp_change_events: pd.DataFrame) -> pd.DataFrame:
             })
 
     out = pd.DataFrame(records)
-    if out.empty:
-        return pd.DataFrame(columns=['player1Id','player1Name','eventTeam','strength','seconds','minutes'])
     return (out.sort_values(['eventTeam','player1Name','strength'])
                .reset_index(drop=True))
 
@@ -4114,7 +4203,7 @@ def on_ice_stats_by_player_strength(
     xg_col_candidates=("xG","xg","shot_xg","xg_shot"),
     include_goalies: bool = False,
     rates: bool = False,          # if True, add per60 rates for key metrics
-    rate_fields=("CF","CA","FF","FA","SF","SA","xG","xGA","GF","GA","PF","PA")
+    rate_fields=("CF","CA","FF","FA","SF","SA","xGF","xGA","GF","GA","PF","PA")
 ) -> pd.DataFrame:
     """
     Compute per-player, per-strength on-ice stats + TOI (and optional per60 rates).
@@ -4136,7 +4225,7 @@ def on_ice_stats_by_player_strength(
         CF/CA  = Corsi (all attempts incl. blocks)
         FF/FA  = Fenwick (attempts excl. blocks)
         SF/SA  = Shots on goal (SHOT + GOAL)
-        xG/xGA = expected goals for/against
+        xGF/xGA = expected goals for/against
         GF/GA  = goals
         PF/PA  = penalties drawn/taken while on-ice
 
@@ -4180,93 +4269,75 @@ def on_ice_stats_by_player_strength(
     toi = defaultdict(float)  # (pid,strength) -> seconds
     stats = defaultdict(lambda: defaultdict(float))  # (pid,strength) -> metric -> value
 
-    def strength_label(team=None):
-        """
-        Return strength label from the perspective of the given team.
-        If team is None, returns from t1's perspective (for backward compatibility).
-        If team is specified, returns the label showing that team's skaters first.
-        """
+    def strength_label():
         s1, s2 = len(skaters_on[t1]), len(skaters_on[t2])
         g1, g2 = len(goalies_on[t1]) > 0, len(goalies_on[t2]) > 0
         left  = f"{s1}{'' if g1 else '*'}"
         right = f"{s2}{'' if g2 else '*'}"
-        
-        # If team is specified and it's t2, flip the perspective
-        if team == t2:
-            return f"{right}v{left}"
         return f"{left}v{right}"
 
     def iter_players(team):
         return (list(skaters_on[team]) + list(goalies_on[team])) if include_goalies else list(skaters_on[team])
 
     # Attribute a *play* row at current strength
-    def attribute_play(row):
+    def attribute_play(row, s):
         evt = str(row['Event'])
         team = row.get('eventTeam')
         if team not in (t1, t2):  # ignore rows without a valid team
             return
 
-        # SHOT/GOAL/MISS/ BLOCK  -> CF/CA, FF/FA, SF/SA, GF/GA, xG/xGA
+        # SHOT/GOAL/MISS/ BLOCK  -> CF/CA, FF/FA, SF/SA, GF/GA, xGF/xGA
         if evt in ('GOAL','SHOT','MISS','BLOCK'):
             if evt == 'BLOCK':
                 off_team, def_team = other[team], team
-                is_block, is_shot, is_goal, is_miss = True, False, False, False
+                is_block, is_shot, is_goal, _is_miss = True, False, False, False
                 xg = 0.0
             else:
                 off_team, def_team = team, other[team]
                 is_goal = (evt == 'GOAL')
                 is_shot = (evt == 'SHOT') or is_goal
-                is_miss = (evt == 'MISS')
                 is_block = False
                 xg = float(row[xg_col]) if xg_col and pd.notna(row.get(xg_col)) else 0.0
 
-            # FOR (offense) - use strength label from off_team's perspective
-            s_off = strength_label(off_team)
+            # FOR (offense)
             for pid in iter_players(off_team):
                 # Corsi/Fenwick/Shots/Goals
-                stats[(pid,s_off)]['CF'] += 1
-                if not is_block: stats[(pid,s_off)]['FF'] += 1
-                if is_shot:      stats[(pid,s_off)]['SF'] += 1
-                if is_goal:      stats[(pid,s_off)]['GF'] += 1
+                stats[(pid,s)]['CF'] += 1
+                if not is_block: stats[(pid,s)]['FF'] += 1
+                if is_shot:      stats[(pid,s)]['SF'] += 1
+                if is_goal:      stats[(pid,s)]['GF'] += 1
                 # xG
-                stats[(pid,s_off)]['xG'] += xg
+                stats[(pid,s)]['xGF'] += xg
 
-            # AGAINST (defense) - use strength label from def_team's perspective
-            s_def = strength_label(def_team)
+            # AGAINST (defense)
             for pid in iter_players(def_team):
-                stats[(pid,s_def)]['CA'] += 1
-                if not is_block: stats[(pid,s_def)]['FA'] += 1
-                if is_shot:      stats[(pid,s_def)]['SA'] += 1
-                if is_goal:      stats[(pid,s_def)]['GA'] += 1
-                stats[(pid,s_def)]['xGA'] += xg
+                stats[(pid,s)]['CA'] += 1
+                if not is_block: stats[(pid,s)]['FA'] += 1
+                if is_shot:      stats[(pid,s)]['SA'] += 1
+                if is_goal:      stats[(pid,s)]['GA'] += 1
+                stats[(pid,s)]['xGA'] += xg
             return
 
         # PENALTIES  -> PF/PA (penalized team is eventTeam)
         if evt in ('PENL','PEN','PENALTY'):
             penalized = team
             benefited = other[team]
-            s_ben = strength_label(benefited)
-            s_pen = strength_label(penalized)
             for pid in iter_players(benefited):
-                stats[(pid,s_ben)]['PF'] += 1
+                stats[(pid,s)]['PF'] += 1
             for pid in iter_players(penalized):
-                stats[(pid,s_pen)]['PA'] += 1
+                stats[(pid,s)]['PA'] += 1
             return
 
         # Giveaways / Takeaways if you still want them in this table (optional)
         if evt in ('GIVE','GIVEAWAY'):
             gw, op = team, other[team]
-            s_gw = strength_label(gw)
-            s_op = strength_label(op)
-            for pid in iter_players(gw): stats[(pid,s_gw)]['GIVE_for'] += 1
-            for pid in iter_players(op): stats[(pid,s_op)]['GIVE_against'] += 1
+            for pid in iter_players(gw): stats[(pid,s)]['GIVE_for'] += 1
+            for pid in iter_players(op): stats[(pid,s)]['GIVE_against'] += 1
             return
         if evt in ('TAKE','TAKEAWAY'):
             tk, op = team, other[team]
-            s_tk = strength_label(tk)
-            s_op = strength_label(op)
-            for pid in iter_players(tk): stats[(pid,s_tk)]['TAKE_for'] += 1
-            for pid in iter_players(op): stats[(pid,s_op)]['TAKE_against'] += 1
+            for pid in iter_players(tk): stats[(pid,s)]['TAKE_for'] += 1
+            for pid in iter_players(op): stats[(pid,s)]['TAKE_against'] += 1
             return
 
     # ---- Main timeline sweep ----
@@ -4277,14 +4348,15 @@ def on_ice_stats_by_player_strength(
         # 1) Attribute gameplay at this time using current on-ice
         plays = df[(df['elapsedTime']==ts) & (~df['Event'].isin(['ON','OFF']))]
         if not plays.empty:
+            s = strength_label()
             for _, r in plays.iterrows():
-                attribute_play(r)
+                attribute_play(r, s)
 
         # 2) TOI from prev_t -> ts
         if ts > prev_t:
             dt = ts - prev_t
+            s = strength_label()
             for tm in (t1, t2):
-                s = strength_label(tm)
                 for pid in iter_players(tm):
                     toi[(pid,s)] += dt
             prev_t = ts
@@ -4307,8 +4379,8 @@ def on_ice_stats_by_player_strength(
     game_end = int(df['elapsedTime'].max())
     if game_end > prev_t:
         dt = game_end - prev_t
+        s = strength_label()
         for tm in (t1, t2):
-            s = strength_label(tm)
             for pid in iter_players(tm):
                 toi[(pid,s)] += dt
 
@@ -4324,7 +4396,7 @@ def on_ice_stats_by_player_strength(
             'seconds': sec,
             'minutes': sec/60.0,
             # standard metrics initialized to 0
-            'CF':0,'CA':0,'FF':0,'FA':0,'SF':0,'SA':0,'GF':0,'GA':0,'xG':0.0,'xGA':0.0,
+            'CF':0,'CA':0,'FF':0,'FA':0,'SF':0,'SA':0,'GF':0,'GA':0,'xGF':0.0,'xGA':0.0,
             'PF':0,'PA':0
         }
         base.update(stats[(pid,s)])  # merges any counted fields
@@ -4345,7 +4417,7 @@ def on_ice_stats_by_player_strength(
 
     # Pretty order
     order_cols = ['player1Id','player1Name','eventTeam','strength','seconds','minutes',
-                  'CF','CA','FF','FA','SF','SA','GF','GA','xG','xGA','PF','PA']
+                  'CF','CA','FF','FA','SF','SA','GF','GA','xGF','xGA','PF','PA']
     rate_cols = [c for c in out.columns if c.endswith('_per60')]
     out = out.reindex(columns=order_cols + rate_cols).sort_values(
         ['eventTeam','player1Name','strength']
@@ -4373,7 +4445,7 @@ def combo_on_ice_stats(
       'player1Id','player1Name','isGoalie' (for ON/OFF rows)
 
     Events handled:
-      GOAL/SHOT/MISS/BLOCK -> CF/CA, FF/FA, SF/SA, GF/GA, xG/xGA
+      GOAL/SHOT/MISS/BLOCK -> CF/CA, FF/FA, SF/SA, GF/GA, xGF/xGA
       PENL                 -> PF/PA   (eventTeam is penalized team)
     """
     # --- prep ---
@@ -4407,18 +4479,9 @@ def combo_on_ice_stats(
 
     # helpers
     def strength_label():
-        """
-        Return strength label from focus_team's perspective.
-        """
         l = len(sk_on[t1]); r = len(sk_on[t2])
         g1 = len(g_on[t1]) > 0; g2 = len(g_on[t2]) > 0
-        left = f"{l}{'' if g1 else '*'}"
-        right = f"{r}{'' if g2 else '*'}"
-        
-        # If focus_team is t2, flip the perspective
-        if focus_team == t2:
-            return f"{right}v{left}"
-        return f"{left}v{right}"
+        return f"{l}{'' if g1 else '*'}v{r}{'' if g2 else '*'}"
 
     def players_for_combo(team):
         base = list(sk_on[team])
@@ -4469,14 +4532,13 @@ def combo_on_ice_stats(
                     if ptype == 'BLOCK':
                         off = other[for_team]      # eventTeam is blocking team
                         # block is still a Corsi attempt *for* the offense
-                        is_block, is_miss = True, False
+                        is_block, _is_miss = True, False
                         is_goal, is_shot = False, False
                         xg_eff = 0.0
                     else:
                         off = for_team
                         is_goal = (ptype == 'GOAL')
                         is_shot = (ptype in ('SHOT','GOAL'))
-                        is_miss = (ptype == 'MISS')
                         is_block = False
                         xg_eff = xg
 
@@ -4486,7 +4548,7 @@ def combo_on_ice_stats(
                         if not is_block: ST[key]['FF'] += 1
                         if is_shot:      ST[key]['SF'] += 1
                         if is_goal:      ST[key]['GF'] += 1
-                        ST[key]['xG'] += xg_eff
+                        ST[key]['xGF'] += xg_eff
                     else:
                         ST[key]['CA'] += 1
                         if not is_block: ST[key]['FA'] += 1
@@ -4513,7 +4575,7 @@ def combo_on_ice_stats(
             for _, row in plays.iterrows():
                 evt = str(row['Event'])
                 team = row.get('eventTeam')
-                if team not in (t1, t2): 
+                if team not in (t1, t2):
                     continue
                 payload = None
                 if evt in ('GOAL','SHOT','MISS'):
@@ -4574,7 +4636,7 @@ def combo_on_ice_stats(
             'seconds': sec,
             'minutes': sec/60.0,
             # standard stats (init to 0)
-            'CF':0,'CA':0,'FF':0,'FA':0,'SF':0,'SA':0,'GF':0,'GA':0,'xG':0.0,'xGA':0.0,'PF':0,'PA':0
+            'CF':0,'CA':0,'FF':0,'FA':0,'SF':0,'SA':0,'GF':0,'GA':0,'xGF':0.0,'xGA':0.0,'PF':0,'PA':0
         }
         for k, v in ST[(tc, oc, s)].items():
             row[k] = v
@@ -4585,19 +4647,19 @@ def combo_on_ice_stats(
         # Return the schema even if nothing meets min_TOI
         return pd.DataFrame(columns=[
             'team','opp','team_combo_ids','opp_combo_ids','team_combo','opp_combo','strength',
-            'seconds','minutes','CF','CA','FF','FA','SF','SA','GF','GA','xG','xGA','PF','PA'
+            'seconds','minutes','CF','CA','FF','FA','SF','SA','GF','GA','xGF','xGA','PF','PA'
         ])
 
     # per-60 (optional)
     if rates:
         denom = out['seconds'].replace(0, np.nan) / 3600.0
-        for f in ('CF','CA','FF','FA','SF','SA','GF','GA','xG','xGA','PF','PA'):
+        for f in ('CF','CA','FF','FA','SF','SA','GF','GA','xGF','xGA','PF','PA'):
             out[f + '_per60'] = out[f] / denom
         out = out.fillna({c:0 for c in out.columns if c.endswith('_per60')})
 
     # nice ordering
     base_cols = ['team','opp','team_combo','opp_combo','strength','seconds','minutes',
-                 'CF','CA','FF','FA','SF','SA','GF','GA','xG','xGA','PF','PA']
+                 'CF','CA','FF','FA','SF','SA','GF','GA','xGF','xGA','PF','PA']
     rate_cols = [c for c in out.columns if c.endswith('_per60')]
     out = out.sort_values(['strength','team_combo','opp_combo']).reset_index(drop=True)
     return out[base_cols + rate_cols]
@@ -4627,7 +4689,7 @@ def combo_on_ice_stats_both_teams(
       - PENL: eventTeam = penalized team (PF for opponents, PA for penalized)
 
     Returns one row per (team combo vs opp combo/ANY, strength, team) with:
-      TOI, CF/CA, FF/FA, SF/SA, xG/xGA, GF/GA, PF/PA, optional per-60,
+      TOI, CF/CA, FF/FA, SF/SA, xGF/xGA, GF/GA, PF/PA, optional per-60,
       and exploded player columns for both sides:
         player1..N (Id, Name, Position, Number, Headshot)
         oppPlayer1..M (same fields; empty if m_opp == 0)
@@ -4707,21 +4769,10 @@ def combo_on_ice_stats_both_teams(
             }
 
     # helpers ------------------------------------------------------------------
-    def strength_label(team=None):
-        """
-        Return strength label from the perspective of the given team.
-        If team is None, returns from t1's perspective (for backward compatibility).
-        If team is specified, returns the label showing that team's skaters first.
-        """
+    def strength_label():
         l = len(sk_on[t1]); r = len(sk_on[t2])
         g1 = len(g_on[t1]) > 0; g2 = len(g_on[t2]) > 0
-        left = f"{l}{'' if g1 else '*'}"
-        right = f"{r}{'' if g2 else '*'}"
-        
-        # If team is specified and it's t2, flip the perspective
-        if team == t2:
-            return f"{right}v{left}"
-        return f"{left}v{right}"
+        return f"{l}{'' if g1 else '*'}v{r}{'' if g2 else '*'}"
 
     def on_ice_players(team):
         base = list(sk_on[team])
@@ -4733,10 +4784,9 @@ def combo_on_ice_stats_both_teams(
     TOI = defaultdict(float)
     ST  = defaultdict(lambda: defaultdict(float))  # stats
 
-    def add_toi_for_both(dt):
-        # Attribute time to both sides' combo rows with their respective strength labels
+    def add_toi_for_both(dt, s):
+        # Attribute time to both sides' combo rows
         for focus in (t1, t2):
-            s = strength_label(focus)
             opp = other[focus]
             tp = on_ice_players(focus)
             op = on_ice_players(opp)
@@ -4750,12 +4800,11 @@ def combo_on_ice_stats_both_teams(
                 for oc in o_combos:
                     TOI[(focus, tc, oc, s)] += dt
 
-    def add_play_for_both(evt, evt_team, xg_val):
-        # Attribute a play to both sides' rows with their respective strength labels
+    def add_play_for_both(evt, evt_team, xg_val, s):
+        # Attribute a play to both sides' rows
         if evt not in ('GOAL','SHOT','MISS','BLOCK','PENL','PEN','PENALTY'):
             return
         for focus in (t1, t2):
-            s = strength_label(focus)
             opp = other[focus]
             tp = on_ice_players(focus)
             op = on_ice_players(opp)
@@ -4787,7 +4836,7 @@ def combo_on_ice_stats_both_teams(
                             if not is_block: ST[key]['FF'] += 1
                             if is_shot:      ST[key]['SF'] += 1
                             if is_goal:      ST[key]['GF'] += 1
-                            ST[key]['xG'] += xg_eff
+                            ST[key]['xGF'] += xg_eff
                         else:
                             ST[key]['CA'] += 1
                             if not is_block: ST[key]['FA'] += 1
@@ -4810,6 +4859,8 @@ def combo_on_ice_stats_both_teams(
     prev_t = 0
 
     for ts in times:
+        s = strength_label()
+
         # Play events at ts (use current on-ice state)
         plays = df[(df['elapsedTime']==ts) & (~df['Event'].isin(['ON','OFF']))]
         if not plays.empty:
@@ -4819,11 +4870,11 @@ def combo_on_ice_stats_both_teams(
                 if team not in (t1, t2):
                     continue
                 xg_val = float(r[xg_col]) if xg_col and pd.notna(r.get(xg_col)) else None
-                add_play_for_both(evt, team, xg_val)
+                add_play_for_both(evt, team, xg_val, s)
 
         # TOI from prev_t -> ts
         if ts > prev_t:
-            add_toi_for_both(ts - prev_t)
+            add_toi_for_both(ts - prev_t, s)
             prev_t = ts
 
         # Apply OFF/ON at ts (already ordered: OFF then ON)
@@ -4843,7 +4894,7 @@ def combo_on_ice_stats_both_teams(
     # Close final segment
     game_end = int(df['elapsedTime'].max())
     if game_end > prev_t:
-        add_toi_for_both(game_end - prev_t)
+        add_toi_for_both(game_end - prev_t, strength_label())
 
     # -------- build base output ---------------------------------------------
     def combo_label(ids):
@@ -4881,7 +4932,7 @@ def combo_on_ice_stats_both_teams(
             'seconds': float(sec),
             'minutes': float(sec)/60.0,
             # standard stats initialized to 0
-            'CF':0,'CA':0,'FF':0,'FA':0,'SF':0,'SA':0,'GF':0,'GA':0,'xG':0.0,'xGA':0.0,'PF':0,'PA':0
+            'CF':0,'CA':0,'FF':0,'FA':0,'SF':0,'SA':0,'GF':0,'GA':0,'xGF':0.0,'xGA':0.0,'PF':0,'PA':0
         }
         row.update(ST[(focus, tc, oc, s)])
         rows.append(row)
@@ -4890,7 +4941,7 @@ def combo_on_ice_stats_both_teams(
     if out.empty:
         # return schema with exploded cols
         cols = ['team','opp','team_combo','opp_combo','team_combo_pos','opp_combo_pos','strength',
-                'seconds','minutes','CF','CA','FF','FA','SF','SA','GF','GA','xG','xGA','PF','PA']
+                'seconds','minutes','CF','CA','FF','FA','SF','SA','GF','GA','xGF','xGA','PF','PA']
         for i in range(1, n_team+1):
             cols += [f'player{i}Id', f'player{i}Name', f'player{i}Position', f'player{i}Number', f'player{i}Headshot']
         if m_opp > 0:
@@ -4908,7 +4959,7 @@ def combo_on_ice_stats_both_teams(
             col_nb = f'{prefix}{i+1}Number'
             col_hd = f'{prefix}{i+1}Headshot'
 
-            df_out[col_id] = df_out[id_col].apply(lambda ids: ids[i] if ids and len(ids) > i else np.nan)
+            df_out[col_id] = df_out[id_col].apply(lambda ids, i=i: ids[i] if ids and len(ids) > i else np.nan)
             # map metadata
             df_out[col_nm] = df_out[col_id].map(lambda pid: player_info.get(pid, {}).get('name') if pd.notna(pid) else np.nan)
             df_out[col_ps] = df_out[col_id].map(lambda pid: player_info.get(pid, {}).get('pos') if pd.notna(pid) else np.nan)
@@ -4923,14 +4974,14 @@ def combo_on_ice_stats_both_teams(
     # per-60 (optional)
     if rates:
         denom = out['seconds'].replace(0, np.nan) / 3600.0
-        for f in ('CF','CA','FF','FA','SF','SA','GF','GA','xG','xGA','PF','PA'):
+        for f in ('CF','CA','FF','FA','SF','SA','GF','GA','xGF','xGA','PF','PA'):
             out[f + '_per60'] = out[f] / denom
         out = out.fillna({c:0 for c in out.columns if c.endswith('_per60')})
 
     # final tidy ordering
     base_cols = ['team','opp','team_combo','opp_combo','team_combo_pos','opp_combo_pos',
                  'strength','seconds','minutes',
-                 'CF','CA','FF','FA','SF','SA','GF','GA','xG','xGA','PF','PA']
+                 'CF','CA','FF','FA','SF','SA','GF','GA','xGF','xGA','PF','PA']
     rate_cols = [c for c in out.columns if c.endswith('_per60')]
     team_player_cols = sum(([f'player{i}Id', f'player{i}Name', f'player{i}Position', f'player{i}Number', f'player{i}Headshot'] for i in range(1, n_team+1)), [])
     opp_player_cols  = sum(([f'oppPlayer{j}Id', f'oppPlayer{j}Name', f'oppPlayer{j}Position', f'oppPlayer{j}Number', f'oppPlayer{j}Headshot'] for j in range(1, m_opp+1)), []) if m_opp>0 else []
@@ -4939,8 +4990,8 @@ def combo_on_ice_stats_both_teams(
     ordered = base_cols + rate_cols + team_player_cols + opp_player_cols + ['team_combo_ids','opp_combo_ids']
     out = out[ordered].sort_values(['team','strength','team_combo','opp_combo']).reset_index(drop=True)
     return out
-    
-    
+
+
 def team_strength_aggregates(
     pbp: pd.DataFrame,
     *,
@@ -4989,33 +5040,21 @@ def team_strength_aggregates(
     g_on  = {t1: set(), t2: set()}
 
     # helpers
-    def strength_label(team=None):
-        """
-        Return strength label from the perspective of the given team.
-        If team is None, returns from t1's perspective (for backward compatibility).
-        If team is specified, returns the label showing that team's skaters first.
-        """
+    def strength_label():
         l = len(sk_on[t1]); r = len(sk_on[t2])
         g1 = len(g_on[t1]) > 0; g2 = len(g_on[t2]) > 0
         # add '*' if no goalie on that side (optional but handy for pulled-goalie states)
-        left = f"{l}{'' if g1 else '*'}"
-        right = f"{r}{'' if g2 else '*'}"
-        
-        # If team is specified and it's t2, flip the perspective
-        if team == t2:
-            return f"{right}v{left}"
-        return f"{left}v{right}"
+        return f"{l}{'' if g1 else '*'}v{r}{'' if g2 else '*'}"
 
     # accumulators keyed by (team, strength)
     TOI = defaultdict(float)
     ST  = defaultdict(lambda: defaultdict(float))
 
-    def add_toi(dt):
-        """Add TOI for both teams with their respective strength labels"""
-        TOI[(t1, strength_label(t1))] += dt
-        TOI[(t2, strength_label(t2))] += dt
+    def add_toi(dt, s):
+        TOI[(t1, s)] += dt
+        TOI[(t2, s)] += dt
 
-    def add_play(evt, evt_team, xg_val):
+    def add_play(evt, evt_team, xg_val, s):
         if evt not in ('GOAL','SHOT','MISS','BLOCK','PENL','PEN','PENALTY'):
             return
 
@@ -5035,13 +5074,12 @@ def team_strength_aggregates(
                 xg_eff = float(xg_val) if xg_val is not None else 0.0
 
             def push(team_key, for_offense: bool):
-                s = strength_label(team_key)
                 if for_offense:
                     ST[(team_key, s)]['CF'] += 1
                     if not is_block: ST[(team_key, s)]['FF'] += 1
                     if is_shot:      ST[(team_key, s)]['SF'] += 1
                     if is_goal:      ST[(team_key, s)]['GF'] += 1
-                    ST[(team_key, s)]['xG'] += xg_eff
+                    ST[(team_key, s)]['xGF'] += xg_eff
                 else:
                     ST[(team_key, s)]['CA'] += 1
                     if not is_block: ST[(team_key, s)]['FA'] += 1
@@ -5056,16 +5094,16 @@ def team_strength_aggregates(
         else:
             # penalties: eventTeam is penalized
             penalized = evt_team
-            s_pen = strength_label(penalized)
-            s_other = strength_label(other[penalized])
-            ST[(penalized, s_pen)]['PA'] += 1
-            ST[(other[penalized], s_other)]['PF'] += 1
+            ST[(penalized, s)]['PA'] += 1
+            ST[(other[penalized], s)]['PF'] += 1
 
     # ---- sweep the timeline
     times = df['elapsedTime'].dropna().astype(int).unique()
     prev_t = 0
 
     for ts in times:
+        s = strength_label()
+
         # apply all non-ON/OFF events at ts
         plays = df[(df['elapsedTime']==ts) & (~df['Event'].isin(['ON','OFF']))]
         if not plays.empty:
@@ -5075,11 +5113,11 @@ def team_strength_aggregates(
                 if team not in (t1, t2):
                     continue
                 xg_val = float(r[xg_col]) if xg_col and pd.notna(r.get(xg_col)) else None
-                add_play(evt, team, xg_val)
+                add_play(evt, team, xg_val, s)
 
         # accrue TOI from prev_t to ts
         if ts > prev_t:
-            add_toi(ts - prev_t)
+            add_toi(ts - prev_t, s)
             prev_t = ts
 
         # process OFF then ON at ts (already ordered)
@@ -5098,7 +5136,7 @@ def team_strength_aggregates(
     # close final segment
     game_end = int(df['elapsedTime'].max())
     if game_end > prev_t:
-        add_toi(game_end - prev_t)
+        add_toi(game_end - prev_t, strength_label())
 
     # ---- build output
     rows = []
@@ -5112,7 +5150,7 @@ def team_strength_aggregates(
             'seconds': float(sec),
             'minutes': float(sec)/60.0,
             'CF':0,'CA':0,'FF':0,'FA':0,'SF':0,'SA':0,'GF':0,'GA':0,
-            'xG':0.0,'xGA':0.0,'PF':0,'PA':0
+            'xGF':0.0,'xGA':0.0,'PF':0,'PA':0
         }
         row.update(ST[(team, s)])
         rows.append(row)
@@ -5121,21 +5159,20 @@ def team_strength_aggregates(
     if out.empty:
         return pd.DataFrame(columns=[
             'team','opp','strength','seconds','minutes',
-            'CF','CA','FF','FA','SF','SA','GF','GA','xG','xGA','PF','PA'
+            'CF','CA','FF','FA','SF','SA','GF','GA','xGF','xGA','PF','PA'
         ])
 
     # optional per-60s
     if rates:
         denom_hours = out['seconds'].replace(0, np.nan) / 3600.0
-        for f in ('CF','CA','FF','FA','SF','SA','GF','GA','xG','xGA','PF','PA'):
+        for f in ('CF','CA','FF','FA','SF','SA','GF','GA','xGF','xGA','PF','PA'):
             out[f + '_per60'] = out[f] / denom_hours
         out = out.fillna({c:0 for c in out.columns if c.endswith('_per60')})
 
     # tidy order
     base_cols = ['team','opp','strength','seconds','minutes',
-                 'CF','CA','FF','FA','SF','SA','GF','GA','xG','xGA','PF','PA']
+                 'CF','CA','FF','FA','SF','SA','GF','GA','xGF','xGA','PF','PA']
     rate_cols = [c for c in out.columns if c.endswith('_per60')]
     out = out[base_cols + rate_cols].sort_values(['team','strength']).reset_index(drop=True)
 
     return out
-    

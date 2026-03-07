@@ -1,9 +1,9 @@
 [project]
 name = "scrapernhl"
-version = "0.1.4"
+version = "0.3.1"
 description = "A comprehensive Python package for scraping and analyzing NHL data with built-in Expected Goals (xG) modeling"
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 license = {text = "MIT"}
 authors = [
     {name = "Max Tixador", email = "maxtixador@gmail.com"}
@@ -27,7 +27,6 @@ classifiers = [
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
@@ -41,14 +40,42 @@ dependencies = [
     "beautifulsoup4>=4.12.0",
     "click>=8.0.0",
     "joblib>=1.3.0",
-    "jupyterlab>=4.0.0",
     "numpy>=2.0.0",
-    "pandas>=2.0.0",
-    "polars>=0.20.0",
+    "pandas>=2.2.3",
+    "polars>=1.0.0",
     "requests>=2.31.0",
+    "rich>=13.0.0",
     "selectolax>=0.3.27",
-    "urllib3>=2.0.0",
+    "urllib3>=2.0.7",
+]
+
+[project.optional-dependencies]
+analytics = [
     "xgboost>=2.0.0",
+    "seaborn>=0.13.2",
+]
+notebooks = [
+    "jupyterlab>=4.0.0",
+    "playwright>=1.57.0",
+    "seaborn>=0.13.2",
+]
+test = [
+    "pytest>=7.0.0",
+]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+    "ruff>=0.4.0",
+    "mypy>=1.0.0",
+    "mkdocs>=1.6.1",
+    "mkdocs-material>=9.7.1",
+    "mkdocstrings[python]>=1.0.0",
+    "mkdocs-git-revision-date-plugin>=0.3.2",
+    "mkdocs-minify-plugin>=0.8.0",
+    "mkdocs-macros-plugin>=1.5.0",
+]
+all = [
+    "scrapernhl[analytics,notebooks,dev]",
 ]
 
 [project.urls]
@@ -72,17 +99,6 @@ include = ["scrapernhl*"]
 [tool.setuptools.package-data]
 scrapernhl = ["models/*.json", "models/*.pkl"]
 
-[dependency-groups]
-dev = [
-    "mkdocs>=1.6.1; python_version >= '3.10'",
-    "mkdocs-material>=9.7.1; python_version >= '3.10'",
-    "mkdocstrings[python]>=1.0.0; python_version >= '3.10'",
-    "mkdocs-git-revision-date-plugin>=0.3.2; python_version >= '3.10'",
-    "mkdocs-minify-plugin>=0.8.0; python_version >= '3.10'",
-    "mkdocs-macros-plugin>=1.5.0; python_version >= '3.10'",
-    "pytest>=7.0.0",
-    "pytest-cov>=4.0.0",
-]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -91,7 +107,65 @@ python_classes = ["Test*"]
 python_functions = ["test_*"]
 addopts = [
     "--verbose",
-    "--cov=scrapernhl",
-    "--cov-report=html",
-    "--cov-report=term-missing",
 ]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "integration: marks tests as integration tests",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "N",   # pep8-naming
+    "UP",  # pyupgrade
+    "B",   # flake8-bugbear
+    "C4",  # flake8-comprehensions
+]
+ignore = [
+    "E501",  # line too long (handled by formatter)
+    "B008",  # do not perform function calls in argument defaults
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Legacy scraper uses camelCase names (public API — cannot rename without breaking callers)
+# Matrix/linear-algebra variable names (M, S, X, TOI) are domain convention, not bugs
+"scrapernhl/nhl/scraper_legacy.py" = ["N802", "N803", "N806", "B904", "E741", "E701", "E702"]
+"scrapernhl/nhl/scrapers/*.py" = ["N802", "N803", "B904"]
+"scrapernhl/nhl/analytics.py" = ["N806", "N803", "E741", "B904"]
+# scraper.py __all__ intentionally re-exports names lazy-loaded from scraper_legacy.py
+"scrapernhl/nhl/scraper.py" = ["F822", "E402", "I001"]
+# nhl/__init__.py uses star import to re-export the full public NHL API
+"scrapernhl/nhl/__init__.py" = ["F403", "F401"]
+# core/ is legacy infrastructure; exception chaining and formatting are pre-existing style
+"scrapernhl/core/*.py" = ["B904", "E701", "E702"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false  # Legacy scraper has many untyped functions; enforced per-module below
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = [
+    "scrapernhl.core.*",
+    "scrapernhl.nhl.scrapers.*",
+    "scrapernhl.client",
+    "scrapernhl.exceptions",
+    "scrapernhl.urls",
+    "scrapernhl.parsers",
+    "scrapernhl.transform",
+    "scrapernhl.enrichment",
+]
+disallow_untyped_defs = true
