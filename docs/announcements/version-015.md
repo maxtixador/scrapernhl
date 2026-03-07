@@ -21,7 +21,7 @@ Version 0.1.5 is now available with **major new features**: comprehensive suppor
 
 This release includes complete scraper coverage, robust test suites, and bug fixes to ensure reliable data collection across all leagues.
 
-Thanks to Louis Boulet for telling me about the massive bug in strength label calculations that prompted this fix! Also thanks to Claude Code (I am not sponsored by Anthropic yet unfornunately) for the multiplle rounds of review and and debugging help. 
+Thanks to Louis Boulet for telling me about the massive bug in strength label calculations that prompted this fix! Also thanks to Claude Code (I am not sponsored by Anthropic yet unfortunately) for the multiple rounds of review and debugging help. 
 
 Of course, there are still more improvements to be made. Make sure you follow the project on GitHub and check out the [full changelog](https://github.com/maxtixador/scrapernhl/blob/master/CHANGELOG.md) for details. You can also follow me on Twitter [@maxtixador](https://twitter.com/maxtixador) or on Bluesky [@HabsBrain.com](https://bsky.app/profile/habsbrain.com) for updates.
 

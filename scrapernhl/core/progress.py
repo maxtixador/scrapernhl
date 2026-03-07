@@ -242,7 +242,7 @@ def create_progress_bar(
 def create_table(
     data: Any = None,
     title: str = "",
-    columns: list[str] = None,
+    columns: list[str] | None = None,
     show_header: bool = True,
     show_lines: bool = False,
     box_style: Any = None,

@@ -117,7 +117,7 @@ SCHEMAS = {
     ),
 
     "plays": ColumnSchema(
-        required={"eventId", "period", "timeInPeriod", "typeDescKey", "situationCode"},
+        required={"eventId", "period", "timeInPeriod", "eventType", "situationCode"},
         optional={"xCoord", "yCoord", "details", "homeTeamDefendingSide"},
         rename_map={
             "periodDescriptor.number": "period",

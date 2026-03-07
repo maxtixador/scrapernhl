@@ -244,6 +244,8 @@ def log_scraping_progress(
     logger.info(f"{operation}: {current}/{total} {item_name} ({percentage:.1f}%)")
 
 
-# Initialize default logging on module import
-# Users can override with setup_logging()
-setup_logging(level="WARNING", format_style="default", colored=True)
+# Initialize default logging on module import if not already configured.
+# Users can override with setup_logging(), or configure the 'scrapernhl' logger themselves.
+root_logger = logging.getLogger("scrapernhl")
+if not root_logger.handlers:
+    setup_logging(level="WARNING", format_style="default", colored=True)
