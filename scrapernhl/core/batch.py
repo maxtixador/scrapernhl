@@ -293,8 +293,8 @@ def scrape_season_games(
         >>> plays = scrape_season_games("20232024", team="TOR", max_workers=10)
         >>> print(f"Scraped {len(plays)} plays from {plays['gameId'].nunique()} games")
     """
-    from scrapernhl.scrapers.games import getGameData
-    from scrapernhl.scrapers.schedule import getScheduleData
+    from scrapernhl.nhl.scrapers.games import getGameData
+    from scrapernhl.nhl.scrapers.schedule import getScheduleData
 
     console.print_info(f"Fetching schedule for season {season}...")
 

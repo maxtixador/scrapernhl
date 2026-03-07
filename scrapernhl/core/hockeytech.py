@@ -22,6 +22,8 @@ from typing import Any
 import pandas as pd
 import requests
 
+from scrapernhl.config import LEAGUES as _CENTRAL_LEAGUES
+
 
 @dataclass
 class LeagueConfig:
@@ -50,32 +52,33 @@ class LeagueConfig:
             raise ValueError(f"Unknown feed_type: {self.feed_type}")
 
 
-# League configurations
+# League configurations – API keys are sourced from scrapernhl.config (which
+# reads them from environment variables with bundled defaults as a fallback).
 LEAGUE_CONFIGS = {
     "qmjhl": LeagueConfig(
         client_code="lhjmq",
-        api_key="f322673b6bcae299",
+        api_key=_CENTRAL_LEAGUES['qmjhl'].api_key,
         base_url="https://cluster.leaguestat.com/feed/index.php",
         feed_type="gc"
     ),
     "ohl": LeagueConfig(
         client_code="ohl",
-        api_key="f1aa699db3d81487",
+        api_key=_CENTRAL_LEAGUES['ohl'].api_key,
         feed_type="gc"
     ),
     "whl": LeagueConfig(
         client_code="whl",
-        api_key="f1aa699db3d81487",
+        api_key=_CENTRAL_LEAGUES['whl'].api_key,
         feed_type="gc"
     ),
     "ahl": LeagueConfig(
         client_code="ahl",
-        api_key="ccb91f29d6744675",
+        api_key=_CENTRAL_LEAGUES['ahl'].api_key,
         feed_type="statviewfeed"
     ),
     "pwhl": LeagueConfig(
         client_code="pwhl",
-        api_key="446521baf8c38984",
+        api_key=_CENTRAL_LEAGUES['pwhl'].api_key,
         feed_type="statviewfeed"
     ),
 }
