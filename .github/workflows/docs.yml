@@ -25,7 +25,7 @@ jobs:
       
       - name: Install dependencies
         run: |
-          uv sync --group dev
+          uv sync --extra dev
       
       - name: Deploy to GitHub Pages
         run: |
