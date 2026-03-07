@@ -1,429 +1,272 @@
 # Command-Line Interface (CLI) Examples
 
-The ScraperNHL CLI allows you to scrape NHL data directly from the command line without writing any Python code. This is perfect for quick data exports, shell scripts, cron jobs, and automated workflows.
+The ScraperNHL CLI lets you scrape multi-league hockey data directly from the terminal without writing Python. Useful for quick exports, shell scripts, and cron jobs.
 
-## Getting Started
+## Supported Leagues
 
-View available commands:
+ScraperNHL supports 6 leagues: NHL, PWHL, AHL, OHL, WHL, QMJHL.
+
+NHL commands are **top-level** (e.g. `python -m scrapernhl standings`).
+Non-NHL leagues use **subcommands** (e.g. `python -m scrapernhl ahl standings`).
+
+---
+
+## Getting Help
 
 ```bash
-python scrapernhl/cli.py --help
+python -m scrapernhl --help
+python -m scrapernhl ahl --help
+python -m scrapernhl pwhl --help
 ```
 
-Output:
-```
-Usage: cli.py [OPTIONS] COMMAND [ARGS]...
-
-  ScraperNHL - Command-line interface for NHL data scraping.
-
-  Scrape NHL teams, schedules, standings, rosters, stats, games, and draft
-  data directly from the command line.
-
-Options:
-  --version  Show the version and exit.
-  --help     Show this message and exit.
-
-Commands:
-  draft      Scrape NHL draft data.
-  game       Scrape play-by-play data for a specific game.
-  roster     Scrape team roster.
-  schedule   Scrape team schedule.
-  standings  Scrape NHL standings.
-  stats      Scrape team player statistics.
-  teams      Scrape all NHL teams.
-```
+---
 
 ## Output Formats
 
-All commands support multiple output formats via the `--format` flag:
+All commands support `--format` / `-f`:
 
-- `csv` (default) - Comma-separated values
-- `json` - JSON format
-- `parquet` - Compressed Parquet format (best for large datasets)
-- `excel` - Excel spreadsheet (.xlsx)
+- `csv` (default) — comma-separated
+- `json` — JSON records
+- `parquet` — compressed Parquet (best for large datasets)
+- `excel` — Excel spreadsheet (.xlsx)
 
-Example:
-```bash
-python scrapernhl/cli.py teams --format json --output teams.json
-```
+Use `--output` / `-o` to set a custom file path.
 
-## Teams Command
+---
 
-Scrape information about all NHL teams.
+## NHL Commands
 
-### Basic Usage
+NHL commands run at the top level (no league subcommand):
+
+### Teams
 
 ```bash
 # Default: saves to nhl_teams.csv
-python scrapernhl/cli.py teams
+python -m scrapernhl teams
 
-# Specify custom output file
-python scrapernhl/cli.py teams --output my_teams.csv
-
-# Export as JSON
-python scrapernhl/cli.py teams --format json --output teams.json
-
-# Export as Parquet
-python scrapernhl/cli.py teams --format parquet --output teams.parquet
-
-# Use Polars instead of Pandas (faster for large datasets)
-python scrapernhl/cli.py teams --polars
+# Custom output
+python -m scrapernhl teams --output my_teams.csv
+python -m scrapernhl teams --format json --output teams.json
+python -m scrapernhl teams --format parquet --output teams.parquet
 ```
 
-### Example Output
-
-```
-Scraping NHL teams...
-Successfully scraped 32 teams
-Saved to: nhl_teams.csv
-```
-
-## Schedule Command
-
-Scrape a team's schedule for a specific season.
-
-### Basic Usage
-
-```bash
-python scrapernhl/cli.py schedule TEAM SEASON [OPTIONS]
-```
-
-**Arguments:**
-- `TEAM` - Team abbreviation (e.g., MTL, TOR, BOS, NYR)
-- `SEASON` - Season in format YYYYYYYY (e.g., 20252026)
-
-### Examples
+### Schedule
 
 ```bash
 # Montreal Canadiens 2025-26 schedule
-python scrapernhl/cli.py schedule MTL 20252026
+python -m scrapernhl schedule MTL 20252026
 
-# Toronto Maple Leafs with custom output
-python scrapernhl/cli.py schedule TOR 20252026 --output tor_schedule.csv
-
-# Boston Bruins as JSON
-python scrapernhl/cli.py schedule BOS 20252026 --format json
-
-# Vegas Golden Knights as Parquet
-python scrapernhl/cli.py schedule VGK 20252026 --format parquet
+# Custom output
+python -m scrapernhl schedule TOR 20252026 --output tor_schedule.csv
+python -m scrapernhl schedule BOS 20252026 --format json
 ```
 
-### Example Output
-
-```
-Scraping MTL schedule for 20252026...
-Successfully scraped 82 games
-Saved to: mtl_schedule_20252026.csv
-```
-
-## Standings Command
-
-Scrape NHL standings for a specific date.
-
-### Basic Usage
+### Standings
 
 ```bash
 # Current standings (uses today's date)
-python scrapernhl/cli.py standings
+python -m scrapernhl standings
 
-# Standings for specific date (YYYY-MM-DD)
-python scrapernhl/cli.py standings 2025-12-25
+# Standings for a specific date (YYYY-MM-DD)
+python -m scrapernhl standings 2025-12-25
 
-# Export to different format
-python scrapernhl/cli.py standings --format json --output standings.json
+# Save to file
+python -m scrapernhl standings --format json --output standings.json
 ```
 
-### Examples
+### Roster
 
 ```bash
-# Get current standings
-python scrapernhl/cli.py standings
-
-# Standings on Christmas 2025
-python scrapernhl/cli.py standings 2025-12-25
-
-# Save to custom file
-python scrapernhl/cli.py standings --output current_standings.csv
+python -m scrapernhl roster MTL 20252026
+python -m scrapernhl roster EDM 20252026 --format json
+python -m scrapernhl roster TOR 20252026 --output leafs_roster.csv
 ```
 
-### Example Output
-
-```
-Scraping NHL standings for 2026-01-01...
-Successfully scraped standings for 32 teams
-Saved to: nhl_standings_2026-01-01.csv
-```
-
-## Roster Command
-
-Scrape a team's roster for a specific season.
-
-### Basic Usage
-
-```bash
-python scrapernhl/cli.py roster TEAM SEASON [OPTIONS]
-```
-
-### Examples
-
-```bash
-# Montreal Canadiens roster
-python scrapernhl/cli.py roster MTL 20252026
-
-# Edmonton Oilers roster as JSON
-python scrapernhl/cli.py roster EDM 20252026 --format json
-
-# Custom output file
-python scrapernhl/cli.py roster TOR 20252026 --output leafs_roster.csv
-```
-
-### Example Output
-
-```
-Scraping MTL roster for 20252026...
-Successfully scraped 28 players
-Saved to: mtl_roster_20252026.csv
-```
-
-## Stats Command
-
-Scrape player statistics for a team.
-
-### Basic Usage
-
-```bash
-python scrapernhl/cli.py stats TEAM SEASON [OPTIONS]
-```
-
-### Options
-
-- `--goalies` - Scrape goalie stats instead of skater stats
-- `--session` - Session type (2=regular season, 3=playoffs, default: 2)
-
-### Examples
+### Stats
 
 ```bash
 # Skater stats (default)
-python scrapernhl/cli.py stats MTL 20252026
+python -m scrapernhl stats MTL 20252026
 
 # Goalie stats
-python scrapernhl/cli.py stats MTL 20252026 --goalies
+python -m scrapernhl stats MTL 20252026 --goalies
 
 # Playoff stats
-python scrapernhl/cli.py stats TOR 20252026 --session 3
-
-# Combined example: playoff goalie stats
-python scrapernhl/cli.py stats BOS 20252026 --goalies --session 3
+python -m scrapernhl stats TOR 20252026 --session 3
 
 # Export to JSON
-python scrapernhl/cli.py stats NYR 20252026 --format json
+python -m scrapernhl stats NYR 20252026 --format json
 ```
 
-### Example Output
-
-```
-Scraping MTL skaters stats for 20252026...
-Successfully scraped stats for 23 skaters
-Saved to: mtl_skaters_20252026.csv
-```
-
-## Game Command
-
-Scrape play-by-play data for a specific game.
-
-### Basic Usage
+### Game (Play-by-Play)
 
 ```bash
-python scrapernhl/cli.py game GAME_ID [OPTIONS]
+python -m scrapernhl game 2024020001
+python -m scrapernhl game 2024020001 --format json
+python -m scrapernhl game 2024020001 --output pbp.parquet --format parquet
 ```
 
-**Arguments:**
-- `GAME_ID` - NHL game ID (e.g., 2024020001)
-
-### Options
-
-- `--with-xg` - Include expected goals (xG) predictions for shot events
-
-### Examples
-
-```bash
-# Basic play-by-play
-python scrapernhl/cli.py game 2024020001
-
-# With expected goals analysis
-python scrapernhl/cli.py game 2024020001 --with-xg
-
-# Export to JSON
-python scrapernhl/cli.py game 2024020001 --format json
-
-# Custom output with xG
-python scrapernhl/cli.py game 2024020001 --with-xg --output game_with_xg.parquet --format parquet
-```
-
-### Example Output
-
-```
-Scraping play-by-play for game 2024020001...
-Successfully scraped 312 events
-Saved to: game_2024020001.csv
-```
-
-With xG:
-```
-Scraping play-by-play for game 2024020001...
-Calculated xG for shot events
-Successfully scraped 312 events
-Saved to: game_2024020001_with_xg.csv
-```
-
-## Draft Command
-
-Scrape NHL draft data.
-
-### Basic Usage
-
-```bash
-python scrapernhl/cli.py draft YEAR [ROUND] [OPTIONS]
-```
-
-**Arguments:**
-- `YEAR` - Draft year (e.g., 2024, 2025)
-- `ROUND` - Draft round (1-7 or 'all', default: all)
-
-### Examples
+### Draft
 
 ```bash
 # All rounds
-python scrapernhl/cli.py draft 2024
+python -m scrapernhl draft 2024
 
 # First round only
-python scrapernhl/cli.py draft 2024 1
-
-# Specific round
-python scrapernhl/cli.py draft 2024 2
+python -m scrapernhl draft 2024 1
 
 # All rounds as JSON
-python scrapernhl/cli.py draft 2025 all --format json
-
-# Custom output
-python scrapernhl/cli.py draft 2024 1 --output first_round_2024.csv
+python -m scrapernhl draft 2025 all --format json
 ```
 
-### Example Output
+---
+
+## Non-NHL League Commands
+
+PWHL, AHL, OHL, WHL, and QMJHL all use the same subcommand structure:
 
 ```
-Scraping 2024 NHL draft (round 1)...
-Successfully scraped 32 draft picks
-Saved to: nhl_draft_2024_r1.csv
+python -m scrapernhl <league> <command> [options]
 ```
 
-## Practical Use Cases
+### Common Options
+
+| Option | Description |
+|--------|-------------|
+| `--season` | Season ID (e.g. `90` for AHL 2024-25) |
+| `--team-id` | Numeric team ID |
+| `--player-type` | `skater` or `goalie` |
+| `--limit` | Max records to return (default: 50) |
+| `--output` / `-o` | Output file path |
+| `--format` / `-f` | Output format (csv/json/parquet/excel) |
+
+### AHL Examples
+
+```bash
+python -m scrapernhl ahl teams
+python -m scrapernhl ahl schedule
+python -m scrapernhl ahl schedule --team-id 123
+python -m scrapernhl ahl standings --season 90
+python -m scrapernhl ahl roster --team-id 123
+python -m scrapernhl ahl stats --player-type skater --limit 100
+python -m scrapernhl ahl stats --player-type goalie
+python -m scrapernhl ahl game 1027781
+python -m scrapernhl ahl game 1027781 --format parquet
+```
+
+### PWHL Examples
+
+```bash
+python -m scrapernhl pwhl teams
+python -m scrapernhl pwhl standings
+python -m scrapernhl pwhl schedule
+python -m scrapernhl pwhl roster --team-id 1
+python -m scrapernhl pwhl stats
+python -m scrapernhl pwhl stats --player-type goalie --limit 20
+python -m scrapernhl pwhl game 12345
+```
+
+### OHL Examples
+
+```bash
+python -m scrapernhl ohl teams
+python -m scrapernhl ohl standings
+python -m scrapernhl ohl schedule
+python -m scrapernhl ohl roster --team-id 5
+python -m scrapernhl ohl stats --limit 50
+python -m scrapernhl ohl stats --player-type goalie
+python -m scrapernhl ohl game 98765
+```
+
+### WHL Examples
+
+```bash
+python -m scrapernhl whl teams
+python -m scrapernhl whl standings --output whl_standings.csv
+python -m scrapernhl whl schedule
+python -m scrapernhl whl roster --team-id 10
+python -m scrapernhl whl stats --player-type skater
+python -m scrapernhl whl game 11111 --format json
+```
+
+### QMJHL Examples
+
+```bash
+python -m scrapernhl qmjhl teams
+python -m scrapernhl qmjhl standings
+python -m scrapernhl qmjhl schedule
+python -m scrapernhl qmjhl roster --team-id 7
+python -m scrapernhl qmjhl stats --limit 75
+python -m scrapernhl qmjhl game 22222
+```
+
+---
+
+## Practical Examples
 
 ### Daily Standings Report
 
-Create a shell script to get daily standings:
-
 ```bash
 #!/bin/bash
-# daily_standings.sh
-
 DATE=$(date +%Y-%m-%d)
-python scrapernhl/cli.py standings $DATE --output "standings_$DATE.csv"
+python -m scrapernhl standings $DATE --output "standings_$DATE.csv"
 echo "Standings saved for $DATE"
 ```
 
 ### Team Data Export
 
-Export all data for your favorite team:
-
 ```bash
 #!/bin/bash
-# export_team_data.sh
-
 TEAM="MTL"
 SEASON="20252026"
 
-python scrapernhl/cli.py schedule $TEAM $SEASON --output ${TEAM}_schedule.csv
-python scrapernhl/cli.py roster $TEAM $SEASON --output ${TEAM}_roster.csv
-python scrapernhl/cli.py stats $TEAM $SEASON --output ${TEAM}_skaters.csv
-python scrapernhl/cli.py stats $TEAM $SEASON --goalies --output ${TEAM}_goalies.csv
-
-echo "All $TEAM data exported!"
+python -m scrapernhl schedule $TEAM $SEASON --output ${TEAM}_schedule.csv
+python -m scrapernhl roster  $TEAM $SEASON --output ${TEAM}_roster.csv
+python -m scrapernhl stats   $TEAM $SEASON --output ${TEAM}_skaters.csv
+python -m scrapernhl stats   $TEAM $SEASON --goalies --output ${TEAM}_goalies.csv
 ```
 
-### Automated Game Scraping
-
-Set up a cron job to scrape games after they finish:
-
-```bash
-# Cron job: Run every hour during hockey season
-0 * * * * /path/to/scrape_recent_games.sh
-
-# scrape_recent_games.sh
-#!/bin/bash
-for GAME_ID in 2024020100 2024020101 2024020102; do
-    python scrapernhl/cli.py game $GAME_ID --with-xg --format parquet
-done
-```
-
-### Multi-Format Export
-
-Export the same data in multiple formats:
+### All Leagues Export
 
 ```bash
 #!/bin/bash
-# multi_format_export.sh
+# NHL
+python -m scrapernhl teams     --output data/nhl_teams.csv
+python -m scrapernhl standings --output data/nhl_standings.csv
 
-python scrapernhl/cli.py teams --output teams.csv --format csv
-python scrapernhl/cli.py teams --output teams.json --format json
-python scrapernhl/cli.py teams --output teams.parquet --format parquet
+# PWHL
+python -m scrapernhl pwhl teams     --output data/pwhl_teams.csv
+python -m scrapernhl pwhl standings --output data/pwhl_standings.csv
 
-echo "Teams data exported in CSV, JSON, and Parquet formats"
+# AHL
+python -m scrapernhl ahl teams     --output data/ahl_teams.csv
+python -m scrapernhl ahl standings --output data/ahl_standings.csv
+
+# OHL
+python -m scrapernhl ohl teams     --output data/ohl_teams.csv
+python -m scrapernhl ohl standings --output data/ohl_standings.csv
+
+# WHL
+python -m scrapernhl whl teams     --output data/whl_teams.csv
+python -m scrapernhl whl standings --output data/whl_standings.csv
+
+# QMJHL
+python -m scrapernhl qmjhl teams     --output data/qmjhl_teams.csv
+python -m scrapernhl qmjhl standings --output data/qmjhl_standings.csv
 ```
 
-## Tips and Best Practices
+---
 
-### Output File Names
+## Format Tips
 
-If you don't specify `--output`, the CLI automatically generates descriptive filenames:
+| Format | Best for |
+|--------|----------|
+| CSV | Excel, human-readable, simple analysis |
+| JSON | Web apps, APIs |
+| Parquet | Large datasets, Python/pandas (50–80% smaller than CSV) |
+| Excel | Sharing with non-technical users |
 
-- `teams` → `nhl_teams.csv`
-- `schedule MTL 20252026` → `mtl_schedule_20252026.csv`
-- `roster TOR 20252026` → `tor_roster_20252026.csv`
-- `game 2024020001` → `game_2024020001.csv`
-
-### Format Selection
-
-Choose the right format for your use case:
-
-- **CSV** - Best for Excel, simple analysis, human-readable
-- **JSON** - Best for web apps, APIs, JavaScript
-- **Parquet** - Best for large datasets, Python/pandas, analytics (50-80% smaller than CSV)
-- **Excel** - Best for sharing with non-technical users
-
-### Performance
-
-For faster processing of large datasets:
-
-- Use `--polars` flag with the `teams` command
-- Use `--format parquet` for better compression
-- Process multiple files in parallel using shell background jobs (`&`)
-
-### Integration with Python
-
-You can mix CLI and Python usage:
-
-```bash
-# Scrape with CLI
-python scrapernhl/cli.py schedule MTL 20252026 --output schedule.csv
-
-# Then analyze in Python
-python -c "
-import pandas as pd
-schedule = pd.read_csv('schedule.csv')
-print(schedule[schedule['gameState'] == 'OFF'].head())
-"
-```
+---
 
 ## See Also
 

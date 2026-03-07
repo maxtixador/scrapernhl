@@ -8,6 +8,7 @@ wheels/
 
 # Virtual environments
 .venv
+test_env/
 
 # Testing
 .pytest_cache/
@@ -17,3 +18,51 @@ htmlcov/
 
 # MkDocs generated site
 site/
+
+# AI development files (internal use only)
+.ai/summaries/
+.ai/decisions/
+.claude/
+.ai/
+
+# Internal / cloud integration docs (not for public release)
+docs/examples/cloud-pipeline.md
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# VSCode settings
+.vscode/
+
+# MacOS files
+.DS_Store
+Thumbs.db
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+
+# Scrapernhl cache
+.scrapernhl_cache/
+.scrapernhl_cache/*
+.scrapernhl_cache/**/
+
+# Dev/debug scripts (not for version control)
+diagnose_pbp.py
+test_standings.py
+notebooks/testing_nb.ipynb
+notebooks/bootstrap_data.json
+notebooks/qmjhl_rapm.ipynb
+notebooks/qmjhl_score_effects.ipynb
+notebooks/*.csv
+notebooks/*.json
+notebooks/*.parquet
+notebooks/*.gz
+
+# Archive and backup directories
+.archive/
+.backup/
