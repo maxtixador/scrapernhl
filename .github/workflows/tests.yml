@@ -94,4 +94,4 @@ jobs:
           uv pip install -e ".[dev]"
 
       - name: Run tests (skip integration)
-        run: uv run pytest -v -m "not integration"
+        run: .venv/bin/python -m pytest -v -m "not integration"
